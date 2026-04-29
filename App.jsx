@@ -1,16 +1,13 @@
 import { useState, useMemo } from "react";
+import LOGO_SRC from "./logoData.js";
 
-// ─── VIRTUOS DIGITAL BRAND ───────────────────────────────────────────────────
-// Actual Virtuos Digital logo — transparent PNG, embedded as base64
-// logo removed
-
-// JSX component — works on any background colour
+// JSX component — actual Virtuos Digital logo
 const VirtuosLogo = ({ height = 44 }) => (
-  <span style={{fontWeight:900,fontSize:"14px",color:"#E84B9C",letterSpacing:"0.05em"}}>VIRTUOS DIGITAL</span>
+  <img src={LOGO_SRC} alt="Virtuos Digital" style={{height:`${height}px`,display:"block"}}/>
 );
 
-// Plain HTML string versions for use inside exportQuoteHTML template literals
-const LOGO_HTML = (h=44) => '<span style="font-weight:900;font-size:14px;color:#E84B9C;">VIRTUOS DIGITAL</span>';
+// Plain HTML string for use inside exportQuoteHTML / exportQuoteWord template literals
+const LOGO_HTML = (h=44) => `<img src="${LOGO_SRC}" alt="Virtuos Digital" style="height:${h}px;display:block;"/>`;
 
 // ─── DATA ────────────────────────────────────────────────────────────────────
 const PRODUCTS = {
@@ -225,7 +222,100 @@ function ProductLine({line,onUpdate,onRemove,billingCycle,startDate,endDate}){
 }
 
 // ─── HTML EXPORT ─────────────────────────────────────────────────────────────
-function exportQuoteHTML({cl,annualList,discTotal,subUSD,subLocal,taxLocal,grandLocal,customer,qd,currency,billingCycle,monthCount,startDate,endDate,taxConfig,cats,sym}) {
+function exportQuoteWord({cl,annualList,discTotal,subUSD,subLocal,taxLocal,grandLocal,customer,qd,currency,billingCycle,monthCount,startDate,endDate,taxConfig,paymentTerms,cats,sym}) {
+  const f$ = n => `$${n.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}`;
+  const fC = (n,s) => `${s}${n.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}`;
+  const fD = s => s ? new Date(s).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}) : "—";
+  const cycleLabel = billingCycle==="monthly"?`Monthly (${monthCount} mo)`:billingCycle.charAt(0).toUpperCase()+billingCycle.slice(1);
+
+  const tableRows = cl.map(l=>`
+    <tr>
+      <td style="border:1px solid #ccc;padding:6px 10px;">${l.item?.name||""}<br/><small style="color:#666;">${l.item?.description||""}</small></td>
+      <td style="border:1px solid #ccc;padding:6px 10px;text-align:center;">${l.qty}</td>
+      <td style="border:1px solid #ccc;padding:6px 10px;text-align:right;">${f$(l.item?.unitPrice||0)}</td>
+      <td style="border:1px solid #ccc;padding:6px 10px;text-align:right;">${l.disc>0?`-${f$(l.disc)}`:"—"}</td>
+      <td style="border:1px solid #ccc;padding:6px 10px;text-align:right;font-weight:bold;">${f$(l.net)}</td>
+    </tr>`).join("");
+
+  const tcBlocks = cats.map(cat=>`
+    <p><strong>${PRODUCTS[cat].label}</strong><br/>${PRODUCTS[cat].tc}</p>`).join("");
+
+  const html = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+<head><meta charset='utf-8'><title>Quote ${qd.quoteId}</title>
+<style>
+  body{font-family:Arial,sans-serif;font-size:11pt;color:#1E293B;margin:2cm;}
+  h1{color:#0D1B3E;} h2{color:#0D1B3E;border-bottom:1px solid #E2E8F0;padding-bottom:4px;}
+  table{border-collapse:collapse;width:100%;margin-bottom:16pt;}
+  th{background:#0D1B3E;color:#fff;padding:6px 10px;border:1px solid #0D1B3E;text-align:left;}
+  .sig-box{border:1px solid #ccc;height:60px;margin-top:6px;}
+  .field-line{border-bottom:1px solid #ccc;margin-top:4px;min-height:20px;}
+</style></head>
+<body>
+<p>${LOGO_HTML(44)}</p>
+<h1>Sales Quotation — ${qd.quoteId}</h1>
+<table style="border:none;width:100%;margin-bottom:20pt;">
+  <tr><td style="border:none;width:50%;vertical-align:top;">
+    <strong>Prepared For</strong><br/>
+    ${customer.name||"—"}<br/>${customer.company||"—"}<br/>${customer.email||""}${customer.phone?" · "+customer.phone:""}
+  </td><td style="border:none;width:50%;vertical-align:top;">
+    <table style="border:none;font-size:10pt;">
+      ${[["Quote Name",qd.quoteName||"—"],["Prepared By",qd.owner||"—"],["Issue Date",qd.createdOn],["Valid Until",qd.validUntil?fD(qd.validUntil):"30 days"],["Period",`${fD(startDate)} → ${fD(endDate)}`],["Billing",cycleLabel],["Payment Terms",paymentTerms]].map(([k,v])=>`<tr><td style="border:none;color:#64748B;padding:1px 8px 1px 0;font-size:9pt;">${k}</td><td style="border:none;font-weight:600;padding:1px 0;">${v}</td></tr>`).join("")}
+    </table>
+  </td></tr>
+</table>
+
+<h2>Products &amp; Services</h2>
+<table><thead><tr>
+  <th>Product / Description</th><th style="text-align:center;">Seats</th>
+  <th style="text-align:right;">Unit Price (USD/yr)</th>
+  <th style="text-align:right;">Discount</th>
+  <th style="text-align:right;">Net Amount (USD)</th>
+</tr></thead><tbody>${tableRows}</tbody>
+<tfoot>
+  <tr><td colspan="4" style="border:1px solid #ccc;padding:6px 10px;text-align:right;">Sub-Total (USD)</td><td style="border:1px solid #ccc;padding:6px 10px;text-align:right;font-weight:bold;">${f$(subUSD)}</td></tr>
+  ${currency.code!=="USD"?`<tr><td colspan="4" style="border:1px solid #ccc;padding:6px 10px;text-align:right;">Sub-Total (${currency.code}) @ ${currency.rate.toFixed(2)}</td><td style="border:1px solid #ccc;padding:6px 10px;text-align:right;font-weight:bold;">${fC(subLocal,sym)}</td></tr>`:""}
+  ${taxConfig.rate>0?`<tr><td colspan="4" style="border:1px solid #ccc;padding:6px 10px;text-align:right;">${taxConfig.label}</td><td style="border:1px solid #ccc;padding:6px 10px;text-align:right;">${fC(taxLocal,sym)}</td></tr>`:""}
+  <tr style="background:#0D1B3E;color:#fff;"><td colspan="4" style="border:1px solid #0D1B3E;padding:8px 10px;text-align:right;font-weight:bold;">TOTAL (${currency.code})</td><td style="border:1px solid #0D1B3E;padding:8px 10px;text-align:right;font-size:14pt;font-weight:bold;">${fC(grandLocal,sym)}</td></tr>
+</tfoot></table>
+
+<h2>Terms &amp; Conditions</h2>
+${tcBlocks}
+${qd.notes?`<h2>Notes</h2><p>${qd.notes}</p>`:""}
+
+<h2>Acceptance &amp; Authorisation</h2>
+<p>By signing below, both parties agree to the terms and pricing set forth in this quotation (${qd.quoteId}). Payment Terms: <strong>${paymentTerms}</strong>.</p>
+<table style="border:none;"><tr>
+  <td style="border:none;width:48%;vertical-align:top;padding-right:20px;">
+    <strong style="color:#0D1B3E;">Customer Authorisation</strong>
+    <p class="field-label" style="font-size:9pt;color:#64748B;margin:12px 0 2px;">Authorised Signatory Name</p><div class="field-line"></div>
+    <p class="field-label" style="font-size:9pt;color:#64748B;margin:12px 0 2px;">Title / Designation</p><div class="field-line"></div>
+    <p class="field-label" style="font-size:9pt;color:#64748B;margin:12px 0 2px;">Company Name</p><div class="field-line">${customer.company||""}</div>
+    <p class="field-label" style="font-size:9pt;color:#64748B;margin:12px 0 2px;">Signature</p><div class="sig-box"></div>
+    <p class="field-label" style="font-size:9pt;color:#64748B;margin:12px 0 2px;">Date</p><div class="field-line"></div>
+  </td>
+  <td style="border:none;width:48%;vertical-align:top;padding-left:20px;">
+    <strong style="color:#0D1B3E;">Virtuos Digital — Authorisation</strong>
+    <p class="field-label" style="font-size:9pt;color:#64748B;margin:12px 0 2px;">Authorised Signatory Name</p><div class="field-line"></div>
+    <p class="field-label" style="font-size:9pt;color:#64748B;margin:12px 0 2px;">Title / Designation</p><div class="field-line"></div>
+    <p class="field-label" style="font-size:9pt;color:#64748B;margin:12px 0 2px;">Company Name</p><div class="field-line">Virtuos Digital</div>
+    <p class="field-label" style="font-size:9pt;color:#64748B;margin:12px 0 2px;">Signature</p><div class="sig-box"></div>
+    <p class="field-label" style="font-size:9pt;color:#64748B;margin:12px 0 2px;">Date</p><div class="field-line"></div>
+  </td>
+</tr></table>
+
+<p style="margin-top:30px;font-size:9pt;color:#64748B;text-align:center;">Questions? Contact your Virtuos Digital representative · sales@virtuos.com · www.virtuos.com</p>
+</body></html>`;
+
+  const blob = new Blob([html],{type:"application/msword;charset=utf-8"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href=url; a.download=`Quote-${qd.quoteId}.doc`;
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url),10000);
+}
+
+function exportQuoteHTML({cl,annualList,discTotal,subUSD,subLocal,taxLocal,grandLocal,customer,qd,currency,billingCycle,monthCount,startDate,endDate,taxConfig,paymentTerms,cats,sym}) {
   const f$ = n => `$${n.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}`;
   const fC = (n,s) => `${s}${n.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}`;
   const fD = s => s ? new Date(s).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}) : "—";
@@ -351,7 +441,7 @@ function exportQuoteHTML({cl,annualList,discTotal,subUSD,subLocal,taxLocal,grand
         <div style="font-size:12px;color:rgba(255,255,255,0.4);margin-top:2px;">${customer.email||""}${customer.phone?" · "+customer.phone:""}</div>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 18px;align-content:start;">
-        ${[["Quote Name",qd.quoteName||"—"],["Prepared By",qd.owner||"—"],["Issue Date",qd.createdOn],["Valid Until",qd.validUntil?fD(qd.validUntil):"30 days"],["Period",`${fD(startDate)} → ${fD(endDate)}`],["Billing",cycleLabel]].map(([k,v])=>`
+        ${[["Quote Name",qd.quoteName||"—"],["Prepared By",qd.owner||"—"],["Issue Date",qd.createdOn],["Valid Until",qd.validUntil?fD(qd.validUntil):"30 days"],["Period",`${fD(startDate)} → ${fD(endDate)}`],["Billing",cycleLabel],["Payment Terms",paymentTerms]].map(([k,v])=>`
           <div><div style="font-size:9.5px;font-weight:700;color:rgba(255,255,255,0.38);text-transform:uppercase;letter-spacing:0.09em;">${k}</div><div style="font-size:12px;font-weight:600;color:rgba(255,255,255,0.82);margin-top:1px;">${v}</div></div>`).join("")}
       </div>
     </div>
@@ -490,7 +580,6 @@ function exportQuoteHTML({cl,annualList,discTotal,subUSD,subLocal,taxLocal,grand
         <div class="field-label">Signature</div>
         <div class="sig-box">
           <span class="sig-label">Sign Here</span>
-          <div class="docu-badge"><div class="docu-dot"></div><span class="docu-text">DocuSign</span></div>
         </div>
         <div class="field-label">Date</div>
         <div class="field-line"></div>
@@ -505,7 +594,6 @@ function exportQuoteHTML({cl,annualList,discTotal,subUSD,subLocal,taxLocal,grand
         <div class="field-label">Signature</div>
         <div class="sig-box">
           <span class="sig-label">Sign Here</span>
-          <div class="docu-badge"><div class="docu-dot"></div><span class="docu-text">DocuSign</span></div>
         </div>
         <div class="field-label">Date</div>
         <div class="field-line"></div>
@@ -516,7 +604,7 @@ function exportQuoteHTML({cl,annualList,discTotal,subUSD,subLocal,taxLocal,grand
     <div style="background:linear-gradient(135deg,#0D1B3E,#162447);border-radius:10px;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;">
       <div>
         <div style="font-size:10.5px;font-weight:700;color:rgba(255,255,255,0.45);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:3px;">Questions? Contact your Virtuos Digital representative</div>
-        <div style="font-size:12px;color:rgba(255,255,255,0.8);">contact@virtuos.com · www.virtuos.com</div>
+        <div style="font-size:12px;color:rgba(255,255,255,0.8);">sales@virtuos.com · www.virtuos.com</div>
       </div>
       <div style="background:rgba(255,255,255,0.12);border-radius:8px;padding:5px 12px;display:inline-flex;align-items:center;">${logoSVG}</div>
     </div>
@@ -547,7 +635,7 @@ function exportQuoteHTML({cl,annualList,discTotal,subUSD,subLocal,taxLocal,grand
 
 // ─── QUOTE PREVIEW / EXPORT ──────────────────────────────────────────────────
 function QuotePreview({data,onClose}){
-  const {lines,customer,qd,currency,billingCycle,monthCount,startDate,endDate,taxConfig}=data;
+  const {lines,customer,qd,currency,billingCycle,monthCount,startDate,endDate,taxConfig,paymentTerms}=data;
   const sym=currency.symbol;
   const cl=computeLines(lines,startDate,endDate,billingCycle);
 
@@ -613,6 +701,7 @@ function QuotePreview({data,onClose}){
                 ["Valid Until",   qd.validUntil ? fmtDate(qd.validUntil) : "30 days"],
                 ["Period",        `${fmtDate(startDate)} → ${fmtDate(endDate)}`],
                 ["Billing",       billingCycle==="monthly"?`Monthly (${monthCount} mo)`:billingCycle.charAt(0).toUpperCase()+billingCycle.slice(1)],
+                ["Payment Terms", paymentTerms],
               ].map(([k,v])=>(
                 <div key={k}>
                   <div style={{fontSize:"9.5px",fontWeight:700,color:"rgba(255,255,255,0.4)",textTransform:"uppercase",letterSpacing:"0.09em"}}>{k}</div>
@@ -816,13 +905,8 @@ function QuotePreview({data,onClose}){
               ))}
               <div style={{marginBottom:"14px"}}>
                 <div style={{fontSize:"10px",color:"#94A3B8",fontWeight:600,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:"3px"}}>Signature</div>
-                {/* DocuSign placeholder */}
-                <div style={{border:"2px dashed #E2E8F0",borderRadius:"8px",height:"56px",display:"flex",alignItems:"center",justifyContent:"center",background:"#F8FAFC",position:"relative"}}>
+                <div style={{border:"2px dashed #E2E8F0",borderRadius:"8px",height:"56px",display:"flex",alignItems:"center",justifyContent:"center",background:"#F8FAFC"}}>
                   <span style={{fontSize:"10px",color:"#CBD5E1",letterSpacing:"0.08em",textTransform:"uppercase"}}>Sign Here</span>
-                  <div style={{position:"absolute",bottom:"5px",right:"8px",display:"flex",alignItems:"center",gap:"4px"}}>
-                    <div style={{width:"8px",height:"8px",borderRadius:"50%",background:"#FFD700"}}/>
-                    <span style={{fontSize:"9px",color:"#94A3B8",fontWeight:700}}>DocuSign</span>
-                  </div>
                 </div>
               </div>
               <div>
@@ -844,12 +928,8 @@ function QuotePreview({data,onClose}){
               ))}
               <div style={{marginBottom:"14px"}}>
                 <div style={{fontSize:"10px",color:"#94A3B8",fontWeight:600,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:"3px"}}>Signature</div>
-                <div style={{border:"2px dashed #E2E8F0",borderRadius:"8px",height:"56px",display:"flex",alignItems:"center",justifyContent:"center",background:"#F8FAFC",position:"relative"}}>
+                <div style={{border:"2px dashed #E2E8F0",borderRadius:"8px",height:"56px",display:"flex",alignItems:"center",justifyContent:"center",background:"#F8FAFC"}}>
                   <span style={{fontSize:"10px",color:"#CBD5E1",letterSpacing:"0.08em",textTransform:"uppercase"}}>Sign Here</span>
-                  <div style={{position:"absolute",bottom:"5px",right:"8px",display:"flex",alignItems:"center",gap:"4px"}}>
-                    <div style={{width:"8px",height:"8px",borderRadius:"50%",background:"#FFD700"}}/>
-                    <span style={{fontSize:"9px",color:"#94A3B8",fontWeight:700}}>DocuSign</span>
-                  </div>
                 </div>
               </div>
               <div>
@@ -863,7 +943,7 @@ function QuotePreview({data,onClose}){
           <div style={{background:"linear-gradient(135deg,#0D1B3E,#162447)",borderRadius:"10px",padding:"14px 20px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
             <div>
               <div style={{fontSize:"10.5px",fontWeight:700,color:"rgba(255,255,255,0.5)",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:"3px"}}>Questions? Contact your Virtuos Digital representative</div>
-              <div style={{fontSize:"12px",color:"rgba(255,255,255,0.8)"}}>contact@virtuos.com · www.virtuos.com</div>
+              <div style={{fontSize:"12px",color:"rgba(255,255,255,0.8)"}}>sales@virtuos.com · www.virtuos.com</div>
             </div>
             <div style={{background:"rgba(255,255,255,0.12)",borderRadius:"8px",padding:"5px 12px",display:"inline-flex",alignItems:"center"}}>
               <VirtuosLogo height={26}/>
@@ -874,7 +954,11 @@ function QuotePreview({data,onClose}){
         {/* Modal action bar */}
         <div className="qp-action-bar">
           <button onClick={onClose} style={{padding:"9px 20px",border:`1.5px solid ${V.border}`,borderRadius:"8px",background:"#fff",cursor:"pointer",fontSize:"13px",fontWeight:600,color:V.ink,fontFamily:"inherit"}}>Close</button>
-          <button onClick={()=>exportQuoteHTML({cl,annualList,discTotal,subUSD,subLocal,taxLocal,grandLocal,customer,qd,currency,billingCycle,monthCount,startDate,endDate,taxConfig,cats,sym})}
+          <button onClick={()=>exportQuoteWord({cl,annualList,discTotal,subUSD,subLocal,taxLocal,grandLocal,customer,qd,currency,billingCycle,monthCount,startDate,endDate,taxConfig,paymentTerms,cats,sym})}
+            style={{padding:"9px 22px",background:"linear-gradient(135deg,#1D4ED8,#2563EB)",color:"#fff",border:"none",borderRadius:"8px",cursor:"pointer",fontSize:"13px",fontWeight:700,boxShadow:"0 4px 12px rgba(29,78,216,0.35)",fontFamily:"inherit"}}>
+            📄 Export Word (.doc)
+          </button>
+          <button onClick={()=>exportQuoteHTML({cl,annualList,discTotal,subUSD,subLocal,taxLocal,grandLocal,customer,qd,currency,billingCycle,monthCount,startDate,endDate,taxConfig,paymentTerms,cats,sym})}
             style={{padding:"9px 22px",background:"linear-gradient(135deg,#0D1B3E,#1A2C55)",color:"#fff",border:"none",borderRadius:"8px",cursor:"pointer",fontSize:"13px",fontWeight:700,boxShadow:"0 4px 12px rgba(13,27,62,0.35)",fontFamily:"inherit"}}>
             🖨 Export / Print PDF
           </button>
@@ -889,6 +973,7 @@ function QuotePreview({data,onClose}){
 export default function QuoteBuilder(){
   const today=new Date().toISOString().split("T")[0];
   const [customer,setCustomer]=useState({name:"",company:"",email:"",phone:""});
+  const [paymentTerms,setPaymentTerms]=useState("100% Advance");
   const [qd,setQd]=useState({quoteId:generateQuoteId(),quoteName:"",createdOn:new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}),owner:"",notes:"",validUntil:""});
   const [lines,setLines]=useState([]);
   const [currency,setCurrency]=useState(CURRENCIES[0]);
@@ -1037,6 +1122,8 @@ export default function QuoteBuilder(){
               <Inp label="Quote Name" value={qd.quoteName} onChange={v=>setQd(q=>({...q,quoteName:v}))} placeholder="Q1 2026 Proposal"/>
               <Inp label="Owner / Sales Rep" value={qd.owner} onChange={v=>setQd(q=>({...q,owner:v}))} placeholder="Your Name"/>
               <Inp label="Valid Until" type="date" value={qd.validUntil} onChange={v=>setQd(q=>({...q,validUntil:v}))}/>
+              <Sel label="Payment Terms" value={paymentTerms} onChange={setPaymentTerms}
+                options={["100% Advance","Net 15 days","Net 30 days"].map(v=>({value:v,label:v}))}/>
             </Panel>
 
             <Panel title="Subscription Period" icon="📅">
@@ -1143,7 +1230,7 @@ export default function QuoteBuilder(){
 
       {showPreview&&(
         <QuotePreview
-          data={{lines,customer,qd,currency,billingCycle,monthCount,startDate,endDate,taxConfig}}
+          data={{lines,customer,qd,currency,billingCycle,monthCount,startDate,endDate,taxConfig,paymentTerms}}
           onClose={()=>setShowPreview(false)}/>
       )}
     </div>
