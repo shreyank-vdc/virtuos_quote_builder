@@ -969,9 +969,205 @@ function QuotePreview({data,onClose}){
   );
 }
 
+// ─── QUOTE STORAGE ────────────────────────────────────────────────────────────
+const STORAGE_KEY = "virtuos_quotes_v1";
+function loadSavedQuotes() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY)||"[]"); } catch{ return []; }
+}
+function persistQuote(snapshot) {
+  const all = loadSavedQuotes();
+  const idx = all.findIndex(q=>q.id===snapshot.id);
+  if(idx>=0) all[idx]=snapshot; else all.unshift(snapshot);
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(all));
+}
+function deleteQuote(id) {
+  const all = loadSavedQuotes().filter(q=>q.id!==id);
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(all));
+}
+
+// ─── QUOTE HISTORY VIEW ───────────────────────────────────────────────────────
+function QuoteHistory({onNewQuote, onLoadQuote}){
+  const [quotes,setQuotes]=useState(loadSavedQuotes);
+  const [search,setSearch]=useState("");
+  const [sortBy,setSortBy]=useState("savedAt");
+  const [confirm,setConfirm]=useState(null);
+
+  const filtered=quotes
+    .filter(q=>{
+      const s=search.toLowerCase();
+      return !s||q.customer?.company?.toLowerCase().includes(s)||q.customer?.name?.toLowerCase().includes(s)||q.id?.toLowerCase().includes(s)||q.quoteName?.toLowerCase().includes(s)||q.owner?.toLowerCase().includes(s);
+    })
+    .sort((a,b)=>{
+      if(sortBy==="savedAt") return new Date(b.savedAt)-new Date(a.savedAt);
+      if(sortBy==="total") return (b.grandLocal||0)-(a.grandLocal||0);
+      if(sortBy==="company") return (a.customer?.company||"").localeCompare(b.customer?.company||"");
+      return 0;
+    });
+
+  function handleDelete(id){
+    deleteQuote(id);
+    setQuotes(loadSavedQuotes());
+    setConfirm(null);
+  }
+
+  const totalValue=quotes.reduce((s,q)=>s+(q.subUSD||0),0);
+  const fmt$=n=>`$${n.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}`;
+
+  return(
+    <div className="qb-shell">
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap');
+        * { box-sizing: border-box; }
+        .qb-shell { min-height:100vh; background:#F1F5F9; font-family:'DM Sans',system-ui,sans-serif; }
+        .qb-nav { background:linear-gradient(90deg,#0D1B3E,#162447); height:58px; display:flex; align-items:center; justify-content:space-between; padding:0 20px; position:sticky; top:0; z-index:100; box-shadow:0 2px 12px rgba(13,27,62,0.4); gap:10px; }
+        .qb-nav-left { display:flex; align-items:center; gap:12px; min-width:0; }
+        .qb-nav-right { display:flex; gap:8px; align-items:center; flex-shrink:0; }
+        .qh-table { width:100%; border-collapse:collapse; }
+        .qh-table th { padding:10px 14px; text-align:left; font-size:10.5px; font-weight:800; color:#64748B; text-transform:uppercase; letter-spacing:0.07em; border-bottom:2px solid #E2E8F0; cursor:pointer; white-space:nowrap; }
+        .qh-table th:hover { color:#0D1B3E; }
+        .qh-table td { padding:12px 14px; border-bottom:1px solid #F1F5F9; font-size:13px; color:#1E293B; vertical-align:middle; }
+        .qh-table tr:last-child td { border-bottom:none; }
+        .qh-table tr:hover td { background:#F8FAFC; }
+        .qh-badge { display:inline-block; padding:2px 8px; border-radius:5px; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; }
+        @media (max-width:700px) {
+          .qh-hide { display:none; }
+          .qh-table td, .qh-table th { padding:9px 8px; }
+        }
+      `}</style>
+
+      {/* Nav */}
+      <div className="qb-nav">
+        <div className="qb-nav-left">
+          <div style={{background:"#fff",borderRadius:"8px",padding:"5px 12px",display:"inline-flex",alignItems:"center",flexShrink:0}}>
+            <VirtuosLogo height={26}/>
+          </div>
+          <div style={{width:"1px",height:"28px",background:"rgba(255,255,255,0.12)",flexShrink:0}}/>
+          <div style={{color:"#fff",fontWeight:700,fontSize:"14px"}}>Quote History</div>
+        </div>
+        <div className="qb-nav-right">
+          <button onClick={onNewQuote}
+            style={{background:"linear-gradient(135deg,#E84B9C,#F97316)",color:"#fff",border:"none",padding:"8px 16px",borderRadius:"8px",cursor:"pointer",fontSize:"13px",fontWeight:700,fontFamily:"inherit",whiteSpace:"nowrap"}}>
+            + New Quote
+          </button>
+        </div>
+      </div>
+
+      <div style={{maxWidth:"1100px",margin:"0 auto",padding:"24px 20px"}}>
+
+        {/* Stats bar */}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:"12px",marginBottom:"20px"}}>
+          {[
+            ["Total Quotes",quotes.length,"#0D1B3E"],
+            ["Pipeline (USD)",fmt$(totalValue),"#E84B9C"],
+            ["This Month",quotes.filter(q=>q.savedAt&&new Date(q.savedAt).getMonth()===new Date().getMonth()).length,"#0EA5E9"],
+          ].map(([label,val,color])=>(
+            <div key={label} style={{background:"#fff",borderRadius:"12px",padding:"16px 20px",border:"1px solid #E2E8F0",boxShadow:"0 1px 3px rgba(0,0,0,0.04)"}}>
+              <div style={{fontSize:"10px",fontWeight:800,color:"#94A3B8",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:"6px"}}>{label}</div>
+              <div style={{fontSize:"22px",fontWeight:900,color}}>{val}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Controls */}
+        <div style={{display:"flex",gap:"10px",marginBottom:"14px",flexWrap:"wrap"}}>
+          <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search by company, contact, quote ID, owner…"
+            style={{flex:1,minWidth:"200px",border:"1.5px solid #E2E8F0",borderRadius:"8px",padding:"8px 12px",fontSize:"13px",outline:"none",fontFamily:"inherit"}}
+            onFocus={e=>e.target.style.borderColor="#E84B9C"} onBlur={e=>e.target.style.borderColor="#E2E8F0"}/>
+          <select value={sortBy} onChange={e=>setSortBy(e.target.value)}
+            style={{border:"1.5px solid #E2E8F0",borderRadius:"8px",padding:"8px 12px",fontSize:"13px",outline:"none",fontFamily:"inherit",background:"#fff",cursor:"pointer"}}>
+            <option value="savedAt">Sort: Latest first</option>
+            <option value="total">Sort: Highest value</option>
+            <option value="company">Sort: Company A–Z</option>
+          </select>
+        </div>
+
+        {/* Table */}
+        <div style={{background:"#fff",borderRadius:"14px",border:"1px solid #E2E8F0",boxShadow:"0 1px 4px rgba(0,0,0,0.05)",overflow:"hidden"}}>
+          {filtered.length===0?(
+            <div style={{padding:"60px 24px",textAlign:"center"}}>
+              <div style={{fontSize:"36px",marginBottom:"10px"}}>{quotes.length===0?"📋":"🔍"}</div>
+              <div style={{fontSize:"15px",fontWeight:700,color:"#1E293B"}}>{quotes.length===0?"No quotes saved yet":"No quotes match your search"}</div>
+              <div style={{fontSize:"12px",color:"#94A3B8",marginTop:"4px"}}>{quotes.length===0?"Create a quote and preview it to save it here.":"Try a different search term."}</div>
+              {quotes.length===0&&<button onClick={onNewQuote} style={{marginTop:"16px",background:"linear-gradient(135deg,#E84B9C,#F97316)",color:"#fff",border:"none",padding:"10px 22px",borderRadius:"8px",cursor:"pointer",fontSize:"13px",fontWeight:700,fontFamily:"inherit"}}>Create your first quote</button>}
+            </div>
+          ):(
+            <div style={{overflowX:"auto"}}>
+              <table className="qh-table">
+                <thead>
+                  <tr>
+                    <th onClick={()=>setSortBy("company")}>Company / Contact</th>
+                    <th>Quote ID</th>
+                    <th className="qh-hide">Products</th>
+                    <th className="qh-hide" onClick={()=>setSortBy("company")}>Owner</th>
+                    <th className="qh-hide">Payment</th>
+                    <th onClick={()=>setSortBy("total")}>Total (USD)</th>
+                    <th onClick={()=>setSortBy("savedAt")}>Saved</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map(q=>{
+                    const cats=[...new Set((q.lines||[]).map(l=>l.productCategory))];
+                    const catColors={asana:"#FC636B",smartsheet:"#0073EA",professional_services:"#7C3AED"};
+                    const catLabels={asana:"Asana",smartsheet:"Smartsheet",professional_services:"Prof. Services"};
+                    return(
+                      <tr key={q.id}>
+                        <td>
+                          <div style={{fontWeight:700,color:"#1E293B"}}>{q.customer?.company||"—"}</div>
+                          <div style={{fontSize:"11.5px",color:"#94A3B8",marginTop:"1px"}}>{q.customer?.name||""}{q.customer?.email?` · ${q.customer.email}`:""}</div>
+                        </td>
+                        <td>
+                          <div style={{fontFamily:"monospace",fontSize:"12px",fontWeight:700,color:"#0D1B3E",background:"#F1F5F9",padding:"2px 7px",borderRadius:"5px",display:"inline-block"}}>{q.id}</div>
+                          {q.quoteName&&<div style={{fontSize:"11px",color:"#64748B",marginTop:"3px"}}>{q.quoteName}</div>}
+                        </td>
+                        <td className="qh-hide">
+                          <div style={{display:"flex",flexWrap:"wrap",gap:"4px"}}>
+                            {cats.map(c=>(
+                              <span key={c} className="qh-badge" style={{background:catColors[c]+"18",color:catColors[c],border:`1px solid ${catColors[c]}33`}}>{catLabels[c]}</span>
+                            ))}
+                          </div>
+                        </td>
+                        <td className="qh-hide" style={{color:"#64748B"}}>{q.owner||"—"}</td>
+                        <td className="qh-hide" style={{fontSize:"12px",color:"#64748B"}}>{q.paymentTerms||"—"}</td>
+                        <td>
+                          <div style={{fontWeight:800,color:"#1E293B"}}>{fmt$(q.subUSD||0)}</div>
+                          {q.currency?.code&&q.currency.code!=="USD"&&<div style={{fontSize:"11px",color:"#94A3B8"}}>{q.currency.symbol}{((q.subUSD||0)*q.currency.rate).toLocaleString("en-US",{minimumFractionDigits:0,maximumFractionDigits:0})} {q.currency.code}</div>}
+                        </td>
+                        <td style={{color:"#94A3B8",fontSize:"12px",whiteSpace:"nowrap"}}>{q.savedAt?new Date(q.savedAt).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}):q.createdOn||"—"}</td>
+                        <td>
+                          <div style={{display:"flex",gap:"6px",justifyContent:"flex-end"}}>
+                            <button onClick={()=>onLoadQuote(q)}
+                              style={{padding:"5px 12px",background:"#0D1B3E",color:"#fff",border:"none",borderRadius:"6px",cursor:"pointer",fontSize:"12px",fontWeight:600,fontFamily:"inherit",whiteSpace:"nowrap"}}>
+                              Load
+                            </button>
+                            {confirm===q.id?(
+                              <>
+                                <button onClick={()=>handleDelete(q.id)} style={{padding:"5px 10px",background:"#EF4444",color:"#fff",border:"none",borderRadius:"6px",cursor:"pointer",fontSize:"12px",fontWeight:600,fontFamily:"inherit"}}>Confirm</button>
+                                <button onClick={()=>setConfirm(null)} style={{padding:"5px 10px",background:"#F1F5F9",color:"#64748B",border:"1px solid #E2E8F0",borderRadius:"6px",cursor:"pointer",fontSize:"12px",fontFamily:"inherit"}}>Cancel</button>
+                              </>
+                            ):(
+                              <button onClick={()=>setConfirm(q.id)} style={{padding:"5px 10px",background:"#FEF2F2",color:"#EF4444",border:"1px solid #FECACA",borderRadius:"6px",cursor:"pointer",fontSize:"12px",fontFamily:"inherit"}}>Delete</button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+        <div style={{marginTop:"10px",fontSize:"11px",color:"#94A3B8",textAlign:"right"}}>{filtered.length} of {quotes.length} quotes · stored in browser localStorage</div>
+      </div>
+    </div>
+  );
+}
+
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
 export default function QuoteBuilder(){
   const today=new Date().toISOString().split("T")[0];
+  const [view,setView]=useState("builder"); // "builder" | "history"
   const [customer,setCustomer]=useState({name:"",company:"",email:"",phone:""});
   const [paymentTerms,setPaymentTerms]=useState("100% Advance");
   const [qd,setQd]=useState({quoteId:generateQuoteId(),quoteName:"",createdOn:new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}),owner:"",notes:"",validUntil:""});
@@ -987,6 +1183,32 @@ export default function QuoteBuilder(){
   const handleCycle=c=>{setBillingCycle(c);setEndDate(autoEndDate(startDate,c,monthCount));};
   const handleStart=d=>{setStartDate(d);setEndDate(autoEndDate(d,billingCycle,monthCount));};
   const handleMonths=n=>{const m=Math.max(1,parseInt(n)||1);setMonthCount(m);setEndDate(autoEndDate(startDate,"monthly",m));};
+
+  function saveCurrentQuote(){
+    const cl=computeLines(lines,startDate,endDate,billingCycle);
+    const subUSD=cl.reduce((s,l)=>s+l.net,0);
+    persistQuote({
+      id:qd.quoteId, quoteName:qd.quoteName, createdOn:qd.createdOn, validUntil:qd.validUntil,
+      owner:qd.owner, notes:qd.notes,
+      customer, currency, billingCycle, monthCount, startDate, endDate, taxConfig, paymentTerms,
+      lines, subUSD, grandLocal:subUSD*currency.rate,
+      savedAt:new Date().toISOString(),
+    });
+  }
+
+  function loadQuote(q){
+    setCustomer(q.customer||{name:"",company:"",email:"",phone:""});
+    setPaymentTerms(q.paymentTerms||"100% Advance");
+    setQd({quoteId:q.id,quoteName:q.quoteName||"",createdOn:q.createdOn||"",owner:q.owner||"",notes:q.notes||"",validUntil:q.validUntil||""});
+    setLines(q.lines||[]);
+    setCurrency(q.currency||CURRENCIES[0]);
+    setBillingCycle(q.billingCycle||"annual");
+    setMonthCount(q.monthCount||12);
+    setStartDate(q.startDate||today);
+    setEndDate(q.endDate||autoEndDate(today,"annual",12));
+    setTaxConfig(q.taxConfig||TAX_RATES[0]);
+    setView("builder");
+  }
 
   const addLine=cat=>{
     const p=PRODUCTS[cat];if(!p)return;
@@ -1005,6 +1227,8 @@ export default function QuoteBuilder(){
 
   const days=daysBetween(startDate,endDate);
   const prPct=billingCycle!=="annual"?`Pro-rata: ${(proRataFactor(startDate,endDate,billingCycle)*100).toFixed(1)}%`:null;
+
+  if(view==="history") return <QuoteHistory onNewQuote={()=>{setQd(q=>({...q,quoteId:generateQuoteId()}));setLines([]);setView("builder");}} onLoadQuote={loadQuote}/>;
 
   return(
     <div className="qb-shell">
@@ -1094,12 +1318,16 @@ export default function QuoteBuilder(){
           </div>
         </div>
         <div className="qb-nav-right">
+          <button onClick={()=>setView("history")}
+            style={{background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.75)",padding:"6px 12px",borderRadius:"6px",cursor:"pointer",fontSize:"12px",fontWeight:600,fontFamily:"inherit",flexShrink:0,whiteSpace:"nowrap"}}>
+            📋 History
+          </button>
           <span className="qb-quoteref" style={{color:"rgba(255,255,255,0.4)",fontSize:"11px",fontFamily:"monospace"}}>{qd.quoteId}</span>
           <button onClick={()=>setQd(q=>({...q,quoteId:generateQuoteId()}))}
             style={{background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.7)",padding:"5px 10px",borderRadius:"6px",cursor:"pointer",fontSize:"11.5px",fontFamily:"inherit",flexShrink:0}}>
             ↻
           </button>
-          <button onClick={()=>lines.length>0&&setShowPreview(true)} disabled={lines.length===0}
+          <button onClick={()=>{if(lines.length>0){saveCurrentQuote();setShowPreview(true);}}} disabled={lines.length===0}
             style={{background:lines.length>0?"linear-gradient(135deg,#E84B9C,#F97316)":"#374151",color:"#fff",border:"none",padding:"8px 16px",borderRadius:"8px",cursor:lines.length>0?"pointer":"not-allowed",fontSize:"13px",fontWeight:700,boxShadow:lines.length>0?"0 4px 14px rgba(232,75,156,0.45)":"none",fontFamily:"inherit",transition:"all 0.2s",whiteSpace:"nowrap"}}>
             Preview →
           </button>
