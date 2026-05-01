@@ -63,6 +63,16 @@ export default function Login({ onAuth }) {
     setMode("login");
   }
 
+  async function handleGoogle() {
+    setError(""); setLoading(true);
+    const { error: err } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo: window.location.origin }
+    });
+    setLoading(false);
+    if (err) setError(err.message);
+  }
+
   const titles = { login:"Welcome back", signup:"Create your account", reset:"Reset your password" };
   const subs   = { login:"Sign in to Virtuos Quote Builder", signup:"Only @virtuos.com emails are allowed", reset:"We'll send you a reset link" };
 
@@ -101,6 +111,34 @@ export default function Login({ onAuth }) {
               padding:"10px 13px", fontSize:"13px", color:"#166534", marginBottom:"16px" }}>
               {info}
             </div>
+          )}
+
+          {/* Google SSO — shown on login & signup only */}
+          {mode !== "reset" && (
+            <>
+              <button type="button" onClick={handleGoogle} disabled={loading}
+                style={{ width:"100%", display:"flex", alignItems:"center", justifyContent:"center", gap:"10px",
+                  border:"1.5px solid #E2E8F0", borderRadius:"9px", padding:"11px", background:"#fff",
+                  cursor:loading?"not-allowed":"pointer", fontSize:"14px", fontWeight:600,
+                  fontFamily:"inherit", color:V.ink, marginBottom:"16px",
+                  boxShadow:"0 1px 3px rgba(0,0,0,0.07)", transition:"box-shadow 0.15s" }}
+                onMouseEnter={e=>e.currentTarget.style.boxShadow="0 3px 10px rgba(0,0,0,0.12)"}
+                onMouseLeave={e=>e.currentTarget.style.boxShadow="0 1px 3px rgba(0,0,0,0.07)"}>
+                {/* Google logo SVG */}
+                <svg width="18" height="18" viewBox="0 0 18 18">
+                  <path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"/>
+                  <path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.258c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z"/>
+                  <path fill="#FBBC05" d="M3.964 10.707A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.707V4.961H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.039l3.007-2.332z"/>
+                  <path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.961L3.964 7.293C4.672 5.163 6.656 3.58 9 3.58z"/>
+                </svg>
+                Continue with Google
+              </button>
+              <div style={{ display:"flex", alignItems:"center", gap:"10px", marginBottom:"16px" }}>
+                <div style={{ flex:1, height:"1px", background:"#E2E8F0" }}/>
+                <span style={{ fontSize:"11px", color:"#94A3B8", fontWeight:600, textTransform:"uppercase", letterSpacing:"0.07em" }}>or</span>
+                <div style={{ flex:1, height:"1px", background:"#E2E8F0" }}/>
+              </div>
+            </>
           )}
 
           <form onSubmit={mode==="login"?handleLogin:mode==="signup"?handleSignup:handleReset}>
