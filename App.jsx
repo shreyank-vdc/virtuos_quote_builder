@@ -1,4 +1,5 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
+import { supabase } from "./supabase.js";
 import LOGO_SRC from "./logoData.js";
 
 // JSX component — actual Virtuos Digital logo
@@ -969,28 +970,42 @@ function QuotePreview({data,onClose}){
   );
 }
 
-// ─── QUOTE STORAGE ────────────────────────────────────────────────────────────
-const STORAGE_KEY = "virtuos_quotes_v1";
-function loadSavedQuotes() {
-  try { return JSON.parse(localStorage.getItem(STORAGE_KEY)||"[]"); } catch{ return []; }
+// ─── QUOTE STORAGE (Supabase) ─────────────────────────────────────────────────
+async function fetchAllQuotes() {
+  const { data, error } = await supabase
+    .from("quotes")
+    .select("*")
+    .order("saved_at", { ascending: false });
+  if (error) { console.error(error); return []; }
+  return (data||[]).map(r=>({...r.payload, id:r.id, savedAt:r.saved_at, ownerEmail:r.owner_email, ownerName:r.owner_name}));
 }
-function persistQuote(snapshot) {
-  const all = loadSavedQuotes();
-  const idx = all.findIndex(q=>q.id===snapshot.id);
-  if(idx>=0) all[idx]=snapshot; else all.unshift(snapshot);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(all));
+async function upsertQuote(snapshot, user) {
+  const { error } = await supabase.from("quotes").upsert({
+    id: snapshot.id,
+    user_id: user.id,
+    owner_email: user.email,
+    owner_name: user.user_metadata?.full_name || user.email,
+    saved_at: new Date().toISOString(),
+    payload: snapshot,
+  }, { onConflict: "id" });
+  if (error) console.error(error);
 }
-function deleteQuote(id) {
-  const all = loadSavedQuotes().filter(q=>q.id!==id);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(all));
+async function removeQuote(id) {
+  const { error } = await supabase.from("quotes").delete().eq("id", id);
+  if (error) console.error(error);
 }
 
 // ─── QUOTE HISTORY VIEW ───────────────────────────────────────────────────────
-function QuoteHistory({onNewQuote, onLoadQuote}){
-  const [quotes,setQuotes]=useState(loadSavedQuotes);
+function QuoteHistory({onNewQuote, onLoadQuote, onSignOut, user}){
+  const [quotes,setQuotes]=useState([]);
+  const [loading,setLoading]=useState(true);
   const [search,setSearch]=useState("");
   const [sortBy,setSortBy]=useState("savedAt");
   const [confirm,setConfirm]=useState(null);
+
+  useEffect(()=>{
+    fetchAllQuotes().then(q=>{setQuotes(q);setLoading(false);});
+  },[]);
 
   const filtered=quotes
     .filter(q=>{
@@ -1004,9 +1019,9 @@ function QuoteHistory({onNewQuote, onLoadQuote}){
       return 0;
     });
 
-  function handleDelete(id){
-    deleteQuote(id);
-    setQuotes(loadSavedQuotes());
+  async function handleDelete(id){
+    await removeQuote(id);
+    setQuotes(q=>q.filter(x=>x.id!==id));
     setConfirm(null);
   }
 
@@ -1045,9 +1060,14 @@ function QuoteHistory({onNewQuote, onLoadQuote}){
           <div style={{color:"#fff",fontWeight:700,fontSize:"14px"}}>Quote History</div>
         </div>
         <div className="qb-nav-right">
+          <span style={{color:"rgba(255,255,255,0.5)",fontSize:"12px",display:"none"}} className="qb-nav-subtitle">{user?.email}</span>
           <button onClick={onNewQuote}
             style={{background:"linear-gradient(135deg,#E84B9C,#F97316)",color:"#fff",border:"none",padding:"8px 16px",borderRadius:"8px",cursor:"pointer",fontSize:"13px",fontWeight:700,fontFamily:"inherit",whiteSpace:"nowrap"}}>
             + New Quote
+          </button>
+          <button onClick={onSignOut}
+            style={{background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.7)",padding:"6px 12px",borderRadius:"6px",cursor:"pointer",fontSize:"12px",fontWeight:600,fontFamily:"inherit",whiteSpace:"nowrap"}}>
+            Sign Out
           </button>
         </div>
       </div>
@@ -1083,7 +1103,9 @@ function QuoteHistory({onNewQuote, onLoadQuote}){
 
         {/* Table */}
         <div style={{background:"#fff",borderRadius:"14px",border:"1px solid #E2E8F0",boxShadow:"0 1px 4px rgba(0,0,0,0.05)",overflow:"hidden"}}>
-          {filtered.length===0?(
+          {loading?(
+            <div style={{padding:"60px",textAlign:"center",color:"#94A3B8",fontSize:"13px"}}>Loading quotes…</div>
+          ):filtered.length===0?(
             <div style={{padding:"60px 24px",textAlign:"center"}}>
               <div style={{fontSize:"36px",marginBottom:"10px"}}>{quotes.length===0?"📋":"🔍"}</div>
               <div style={{fontSize:"15px",fontWeight:700,color:"#1E293B"}}>{quotes.length===0?"No quotes saved yet":"No quotes match your search"}</div>
@@ -1098,7 +1120,7 @@ function QuoteHistory({onNewQuote, onLoadQuote}){
                     <th onClick={()=>setSortBy("company")}>Company / Contact</th>
                     <th>Quote ID</th>
                     <th className="qh-hide">Products</th>
-                    <th className="qh-hide" onClick={()=>setSortBy("company")}>Owner</th>
+                    <th className="qh-hide">Created By</th>
                     <th className="qh-hide">Payment</th>
                     <th onClick={()=>setSortBy("total")}>Total (USD)</th>
                     <th onClick={()=>setSortBy("savedAt")}>Saved</th>
@@ -1127,7 +1149,10 @@ function QuoteHistory({onNewQuote, onLoadQuote}){
                             ))}
                           </div>
                         </td>
-                        <td className="qh-hide" style={{color:"#64748B"}}>{q.owner||"—"}</td>
+                        <td className="qh-hide">
+                          <div style={{fontSize:"12.5px",fontWeight:600,color:"#1E293B"}}>{q.ownerName||q.owner||"—"}</div>
+                          <div style={{fontSize:"11px",color:"#94A3B8"}}>{q.ownerEmail||""}</div>
+                        </td>
                         <td className="qh-hide" style={{fontSize:"12px",color:"#64748B"}}>{q.paymentTerms||"—"}</td>
                         <td>
                           <div style={{fontWeight:800,color:"#1E293B"}}>{fmt$(q.subUSD||0)}</div>
@@ -1165,7 +1190,7 @@ function QuoteHistory({onNewQuote, onLoadQuote}){
 }
 
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
-export default function QuoteBuilder(){
+export default function QuoteBuilder({ user, onSignOut }){
   const today=new Date().toISOString().split("T")[0];
   const [view,setView]=useState("builder"); // "builder" | "history"
   const [customer,setCustomer]=useState({name:"",company:"",email:"",phone:""});
@@ -1187,13 +1212,13 @@ export default function QuoteBuilder(){
   function saveCurrentQuote(){
     const cl=computeLines(lines,startDate,endDate,billingCycle);
     const subUSD=cl.reduce((s,l)=>s+l.net,0);
-    persistQuote({
+    const snapshot={
       id:qd.quoteId, quoteName:qd.quoteName, createdOn:qd.createdOn, validUntil:qd.validUntil,
-      owner:qd.owner, notes:qd.notes,
+      owner:qd.owner||user?.user_metadata?.full_name||user?.email, notes:qd.notes,
       customer, currency, billingCycle, monthCount, startDate, endDate, taxConfig, paymentTerms,
       lines, subUSD, grandLocal:subUSD*currency.rate,
-      savedAt:new Date().toISOString(),
-    });
+    };
+    upsertQuote(snapshot, user);
   }
 
   function loadQuote(q){
@@ -1228,7 +1253,7 @@ export default function QuoteBuilder(){
   const days=daysBetween(startDate,endDate);
   const prPct=billingCycle!=="annual"?`Pro-rata: ${(proRataFactor(startDate,endDate,billingCycle)*100).toFixed(1)}%`:null;
 
-  if(view==="history") return <QuoteHistory onNewQuote={()=>{setQd(q=>({...q,quoteId:generateQuoteId()}));setLines([]);setView("builder");}} onLoadQuote={loadQuote}/>;
+  if(view==="history") return <QuoteHistory onNewQuote={()=>{setQd(q=>({...q,quoteId:generateQuoteId()}));setLines([]);setView("builder");}} onLoadQuote={loadQuote} onSignOut={onSignOut} user={user}/>;
 
   return(
     <div className="qb-shell">
@@ -1318,9 +1343,16 @@ export default function QuoteBuilder(){
           </div>
         </div>
         <div className="qb-nav-right">
+          <span style={{color:"rgba(255,255,255,0.4)",fontSize:"11.5px",whiteSpace:"nowrap"}} className="qb-nav-subtitle">
+            {user?.user_metadata?.full_name||user?.email}
+          </span>
           <button onClick={()=>setView("history")}
             style={{background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.75)",padding:"6px 12px",borderRadius:"6px",cursor:"pointer",fontSize:"12px",fontWeight:600,fontFamily:"inherit",flexShrink:0,whiteSpace:"nowrap"}}>
             📋 History
+          </button>
+          <button onClick={onSignOut}
+            style={{background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.12)",color:"rgba(255,255,255,0.55)",padding:"6px 10px",borderRadius:"6px",cursor:"pointer",fontSize:"12px",fontFamily:"inherit",flexShrink:0}}>
+            Sign Out
           </button>
           <span className="qb-quoteref" style={{color:"rgba(255,255,255,0.4)",fontSize:"11px",fontFamily:"monospace"}}>{qd.quoteId}</span>
           <button onClick={()=>setQd(q=>({...q,quoteId:generateQuoteId()}))}
