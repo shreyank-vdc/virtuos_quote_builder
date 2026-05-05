@@ -129,14 +129,14 @@ function Label({children}){
 }
 const IS = {border:`1.5px solid ${V.border}`,borderRadius:"8px",padding:"8px 11px",fontSize:"13.5px",color:V.ink,background:V.white,outline:"none",width:"100%",boxSizing:"border-box",fontFamily:"inherit"};
 
-function Inp({label,type="text",value,onChange,min,max,placeholder,readOnly}){
+function Inp({label,type="text",value,onChange,min,max,placeholder,readOnly,onFocusSelect}){
   return(
     <div style={{display:"flex",flexDirection:"column",gap:"3px"}}>
       {label&&<Label>{label}</Label>}
       <input type={type} value={value} onChange={e=>onChange&&onChange(e.target.value)}
         min={min} max={max} placeholder={placeholder} readOnly={readOnly}
         style={{...IS,background:readOnly?"#F1F5F9":V.white,color:readOnly?V.muted:V.ink}}
-        onFocus={e=>{if(!readOnly)e.target.style.borderColor=V.pink}}
+        onFocus={e=>{if(!readOnly){e.target.style.borderColor=V.pink;if(onFocusSelect)e.target.select();}}}
         onBlur={e=>e.target.style.borderColor=V.border}/>
     </div>
   );
@@ -193,14 +193,14 @@ function ProductLine({line,onUpdate,onRemove,billingCycle,startDate,endDate}){
         <Sel label="Product / Service" value={line.itemId} onChange={v=>onUpdate({...line,itemId:v})}
           options={all.map(i=>({value:i.id,label:i.name}))}/>
         <Inp label={isPro?(item?.perUnit?`Qty (${item.perUnit})`:"Qty"):"Seats"} type="number" min="1"
-          value={line.qty} onChange={v=>onUpdate({...line,qty:Math.max(1,parseInt(v)||1)})}/>
+          value={line.qty} onChange={v=>onUpdate({...line,qty:Math.max(1,parseInt(v)||1)})} onFocusSelect/>
         <div style={{display:"flex",flexDirection:"column",gap:"3px"}}>
           <Label>Discount</Label>
           <div style={{display:"flex"}}>
             <input type="number" min="0" value={line.discount}
               onChange={e=>onUpdate({...line,discount:parseFloat(e.target.value)||0})}
               style={{...IS,borderRadius:"8px 0 0 8px",width:"60%"}}
-              onFocus={e=>e.target.style.borderColor=V.pink} onBlur={e=>e.target.style.borderColor=V.border}/>
+              onFocus={e=>{e.target.style.borderColor=V.pink;e.target.select();}} onBlur={e=>e.target.style.borderColor=V.border}/>
             <select value={line.discountType} onChange={e=>onUpdate({...line,discountType:e.target.value})}
               style={{border:`1.5px solid ${V.border}`,borderLeft:"none",borderRadius:"0 8px 8px 0",padding:"8px 4px",fontSize:"12px",background:V.white,outline:"none",cursor:"pointer",width:"40%",fontFamily:"inherit"}}>
               <option value="percent">%</option>
@@ -387,10 +387,13 @@ function exportQuoteHTML({cl,annualList,discTotal,subUSD,subLocal,taxLocal,grand
     body { font-family: 'DM Sans', Arial, sans-serif; background: #fff; color: #1E293B; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .page { width: 210mm; min-height: 297mm; margin: 0 auto; background: #fff; }
     @media print {
-      body { margin: 0; }
-      .page { width: 100%; margin: 0; }
-      .page-break { page-break-before: always; }
+      @page { margin: 1cm; size: A4; }
+      body { margin: 0; background: #fff; }
+      .page { width: 100%; margin: 0; box-shadow: none !important; }
+      .page-break { page-break-before: always; break-before: page; }
       .no-print { display: none !important; }
+      table { page-break-inside: avoid; break-inside: avoid; }
+      tr { page-break-inside: avoid; break-inside: avoid; }
     }
     @media screen {
       body { background: #E2E8F0; padding: 20px; }
@@ -613,22 +616,17 @@ function exportQuoteHTML({cl,annualList,discTotal,subUSD,subLocal,taxLocal,grand
   </div>
 </div>
 
-<!-- Print trigger -->
-<div class="no-print" style="text-align:center;padding:16px;">
-  <button onclick="window.print()" style="background:linear-gradient(135deg,#0D1B3E,#1A2C55);color:#fff;border:none;padding:12px 32px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700;font-family:'DM Sans',Arial,sans-serif;box-shadow:0 4px 14px rgba(13,27,62,0.4);">🖨 Print / Save as PDF</button>
-  <p style="font-size:11px;color:#94A3B8;margin-top:8px;">Use your browser's Print dialog → select "Save as PDF" as the destination</p>
-</div>
 
 </body>
 </html>`;
 
-  // Always use direct download — window.open is blocked in sandboxed environments
-  const blob = new Blob([html], {type:"text/html;charset=utf-8"});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `Quote-${qd.quoteId}.html`;
-  document.body.appendChild(a);
+  // Open a popup and print directly — no file download
+  const win = window.open("", "_blank", "width=900,height=700");
+  if (!win) { alert("Please allow popups for this site to print quotes."); return; }
+  win.document.write(html);
+  win.document.close();
+  win.focus();
+  setTimeout(() => { win.print(); win.close(); }, 600);
   a.click();
   document.body.removeChild(a);
   setTimeout(()=>URL.revokeObjectURL(url), 10000);
