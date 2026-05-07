@@ -20,7 +20,10 @@ const PRODUCTS = {
       { id: "asana-enterprise",      name: "Asana Enterprise",   unitPrice: 540.00, description: "$45.00/user/mo × 12" },
       { id: "asana-enterprise-plus", name: "Asana Enterprise+",  unitPrice: 660.00, description: "$55.00/user/mo × 12" },
     ],
-    addOns: [],
+    addOns: [
+      { id: "asana-timesheet",              name: "Timesheet Add-on",              unitPrice: 72.00, description: "$6.00/user/mo × 12" },
+      { id: "asana-enterprise-compliance",  name: "Enterprise & Compliance Add-On", unitPrice: 72.00, description: "$6.00/user/mo × 12" },
+    ],
     tc: `For all payments in INR, USD to INR exchange rates shall be applicable 'as on date' at the time of payment by customer. This order is non-cancellable & non-refundable. The Customer acknowledges that they are bound by the Asana Subscriber Agreement for all matters related to licensing, security, privacy, and use of the software available at https://asana.com/terms/subscriber-agreement. *Government Taxes Are Extra.`
   },
   smartsheet: {
@@ -387,9 +390,10 @@ function exportQuoteHTML({cl,annualList,discTotal,subUSD,subLocal,taxLocal,grand
     body { font-family: 'DM Sans', Arial, sans-serif; background: #fff; color: #1E293B; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .page { width: 210mm; min-height: 297mm; margin: 0 auto; background: #fff; }
     @media print {
-      @page { margin: 1cm; size: A4; }
+      @page { margin: 0.8cm; size: A4; }
       body { margin: 0; background: #fff; }
-      .page { width: 100%; margin: 0; box-shadow: none !important; }
+      .page { width: 100%; min-height: 0 !important; margin: 0; box-shadow: none !important; }
+      .page-body { padding: 16px 28px !important; }
       .page-break { page-break-before: always; break-before: page; }
       .no-print { display: none !important; }
       table { page-break-inside: avoid; break-inside: avoid; }
