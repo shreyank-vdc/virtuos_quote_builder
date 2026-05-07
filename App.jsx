@@ -1,14 +1,42 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { supabase } from "./supabase.js";
 import LOGO_SRC from "./logoData.js";
 
-// JSX component — actual Virtuos Digital logo
-const VirtuosLogo = ({ height = 44 }) => (
-  <img src={LOGO_SRC} alt="Virtuos Digital" style={{height:`${height}px`,display:"block"}}/>
-);
+// Strip white background from logo PNG using Canvas (runs once, cached)
+let _transparentLogo = null;
+function getTransparentLogo() {
+  if (_transparentLogo) return Promise.resolve(_transparentLogo);
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = img.width; canvas.height = img.height;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0);
+      const d = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      for (let i = 0; i < d.data.length; i += 4) {
+        if (d.data[i] > 230 && d.data[i+1] > 230 && d.data[i+2] > 230)
+          d.data[i+3] = 0;
+      }
+      ctx.putImageData(d, 0, 0);
+      _transparentLogo = canvas.toDataURL("image/png");
+      resolve(_transparentLogo);
+    };
+    img.src = LOGO_SRC;
+  });
+}
 
-// Plain HTML string for use inside exportQuoteHTML / exportQuoteWord template literals
-const LOGO_HTML = (h=44) => `<img src="${LOGO_SRC}" alt="Virtuos Digital" style="height:${h}px;display:block;"/>`;
+// Pre-process on module load
+const transparentLogoPromise = typeof window !== "undefined" ? getTransparentLogo() : Promise.resolve(LOGO_SRC);
+
+function VirtuosLogo({ height = 44 }) {
+  const [src, setSrc] = useState(_transparentLogo || LOGO_SRC);
+  useEffect(() => { transparentLogoPromise.then(setSrc); }, []);
+  return <img src={src} alt="Virtuos Digital" style={{height:`${height}px`,display:"block"}}/>;
+}
+
+// For HTML/Word exports — returns transparent src (falls back to original if not yet processed)
+const LOGO_HTML = (h=44) => `<img src="${_transparentLogo||LOGO_SRC}" alt="Virtuos Digital" style="height:${h}px;display:block;"/>`;
 
 // ─── DATA ────────────────────────────────────────────────────────────────────
 const PRODUCTS = {
@@ -226,7 +254,8 @@ function ProductLine({line,onUpdate,onRemove,billingCycle,startDate,endDate}){
 }
 
 // ─── HTML EXPORT ─────────────────────────────────────────────────────────────
-function exportQuoteWord({cl,annualList,discTotal,subUSD,subLocal,taxLocal,grandLocal,customer,qd,currency,billingCycle,monthCount,startDate,endDate,taxConfig,paymentTerms,cats,sym}) {
+async function exportQuoteWord({cl,annualList,discTotal,subUSD,subLocal,taxLocal,grandLocal,customer,qd,currency,billingCycle,monthCount,startDate,endDate,taxConfig,paymentTerms,cats,sym}) {
+  await transparentLogoPromise;
   const f$ = n => `$${n.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}`;
   const fC = (n,s) => `${s}${n.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}`;
   const fD = s => s ? new Date(s).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}) : "—";
@@ -319,13 +348,14 @@ ${qd.notes?`<h2>Notes</h2><p>${qd.notes}</p>`:""}
   setTimeout(()=>URL.revokeObjectURL(url),10000);
 }
 
-function exportQuoteHTML({cl,annualList,discTotal,subUSD,subLocal,taxLocal,grandLocal,customer,qd,currency,billingCycle,monthCount,startDate,endDate,taxConfig,paymentTerms,cats,sym}) {
+async function exportQuoteHTML({cl,annualList,discTotal,subUSD,subLocal,taxLocal,grandLocal,customer,qd,currency,billingCycle,monthCount,startDate,endDate,taxConfig,paymentTerms,cats,sym}) {
   const f$ = n => `$${n.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}`;
   const fC = (n,s) => `${s}${n.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}`;
   const fD = s => s ? new Date(s).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}) : "—";
   const cycleLabel = billingCycle==="monthly" ? `Monthly (${monthCount} mo)` : billingCycle.charAt(0).toUpperCase()+billingCycle.slice(1);
   const days = daysBetween(startDate,endDate);
 
+  await transparentLogoPromise; // ensure transparent version is ready
   const logoSVG  = LOGO_HTML(44);
   const logoSVGDark = LOGO_HTML(36);
 
@@ -434,7 +464,7 @@ function exportQuoteHTML({cl,annualList,discTotal,subUSD,subLocal,taxLocal,grand
       <svg width="300" height="150" viewBox="0 0 300 150"><circle cx="300" cy="0" r="150" fill="none" stroke="#E84B9C" stroke-width="38"/><circle cx="300" cy="0" r="100" fill="none" stroke="#F97316" stroke-width="18"/><circle cx="300" cy="0" r="60" fill="none" stroke="#0EA5E9" stroke-width="9"/></svg>
     </div>
     <div style="display:flex;justify-content:space-between;align-items:center;padding:22px 36px 16px;">
-      <div style="background:#fff;border-radius:10px;padding:8px 16px;display:inline-flex;align-items:center;">${logoSVG}</div>
+      <div style="display:inline-flex;align-items:center;">${logoSVG}</div>
       <div style="text-align:right;">
         <div style="font-size:10px;color:rgba(255,255,255,0.45);letter-spacing:0.12em;text-transform:uppercase;margin-bottom:4px;">Quote Reference</div>
         <div style="font-size:16px;font-weight:800;font-family:monospace;color:#fff;background:rgba(255,255,255,0.1);padding:5px 13px;border-radius:7px;border:1px solid rgba(255,255,255,0.15);display:inline-block;">${qd.quoteId}</div>
@@ -614,7 +644,7 @@ function exportQuoteHTML({cl,annualList,discTotal,subUSD,subLocal,taxLocal,grand
         <div style="font-size:10.5px;font-weight:700;color:rgba(255,255,255,0.45);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:3px;">Questions? Contact your Virtuos Digital representative</div>
         <div style="font-size:12px;color:rgba(255,255,255,0.8);">sales@virtuos.com · www.virtuos.com</div>
       </div>
-      <div style="background:rgba(255,255,255,0.12);border-radius:8px;padding:5px 12px;display:inline-flex;align-items:center;">${logoSVG}</div>
+      <div style="display:inline-flex;align-items:center;">${logoSVG}</div>
     </div>
 
   </div>
@@ -676,7 +706,7 @@ function QuotePreview({data,onClose}){
 
           {/* Top strip: logo left, quote ID right */}
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"clamp(12px,3vw,22px) clamp(16px,4vw,36px) 14px",flexWrap:"wrap",gap:"10px"}}>
-            <div style={{background:"#fff",borderRadius:"10px",padding:"8px 16px",display:"inline-flex",alignItems:"center"}}>
+            <div style={{display:"inline-flex",alignItems:"center"}}>
               <VirtuosLogo height={36}/>
             </div>
             <div style={{textAlign:"right"}}>
@@ -948,7 +978,7 @@ function QuotePreview({data,onClose}){
               <div style={{fontSize:"10.5px",fontWeight:700,color:"rgba(255,255,255,0.5)",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:"3px"}}>Questions? Contact your Virtuos Digital representative</div>
               <div style={{fontSize:"12px",color:"rgba(255,255,255,0.8)"}}>sales@virtuos.com · www.virtuos.com</div>
             </div>
-            <div style={{background:"rgba(255,255,255,0.12)",borderRadius:"8px",padding:"5px 12px",display:"inline-flex",alignItems:"center"}}>
+            <div style={{display:"inline-flex",alignItems:"center"}}>
               <VirtuosLogo height={26}/>
             </div>
           </div>
@@ -1055,7 +1085,7 @@ function QuoteHistory({onNewQuote, onLoadQuote, onSignOut, user}){
       {/* Nav */}
       <div className="qb-nav">
         <div className="qb-nav-left">
-          <div style={{background:"#fff",borderRadius:"8px",padding:"5px 12px",display:"inline-flex",alignItems:"center",flexShrink:0}}>
+          <div style={{display:"inline-flex",alignItems:"center",flexShrink:0}}>
             <VirtuosLogo height={26}/>
           </div>
           <div style={{width:"1px",height:"28px",background:"rgba(255,255,255,0.12)",flexShrink:0}}/>
@@ -1335,7 +1365,7 @@ export default function QuoteBuilder({ user, onSignOut }){
       {/* Top nav */}
       <div className="qb-nav">
         <div className="qb-nav-left">
-          <div style={{background:"#fff",borderRadius:"8px",padding:"5px 12px",display:"inline-flex",alignItems:"center",flexShrink:0}}>
+          <div style={{display:"inline-flex",alignItems:"center",flexShrink:0}}>
             <VirtuosLogo height={26}/>
           </div>
           <div style={{width:"1px",height:"28px",background:"rgba(255,255,255,0.12)",flexShrink:0}}/>

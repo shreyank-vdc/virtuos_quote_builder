@@ -2,11 +2,34 @@ import { useState, useEffect } from "react";
 import { supabase } from "./supabase.js";
 import LOGO_SRC from "./logoData.js";
 
+// Use the same transparent-logo cache from App
+let _tLogo = null;
+function getTransparentLogoLogin() {
+  if (_tLogo) return Promise.resolve(_tLogo);
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = img.width; canvas.height = img.height;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0);
+      const d = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      for (let i = 0; i < d.data.length; i += 4)
+        if (d.data[i] > 230 && d.data[i+1] > 230 && d.data[i+2] > 230) d.data[i+3] = 0;
+      ctx.putImageData(d, 0, 0);
+      _tLogo = canvas.toDataURL("image/png");
+      resolve(_tLogo);
+    };
+    img.src = LOGO_SRC;
+  });
+}
+
 const V = { navy:"#0D1B3E", pink:"#E84B9C", border:"#E2E8F0", muted:"#64748B", ink:"#1E293B" };
 const IS = { border:`1.5px solid ${V.border}`, borderRadius:"8px", padding:"10px 13px", fontSize:"14px",
   color:V.ink, background:"#fff", outline:"none", width:"100%", boxSizing:"border-box", fontFamily:"inherit" };
 
 export default function Login({ onAuth }) {
+  const [logoSrc, setLogoSrc]   = useState(LOGO_SRC);
   const [mode, setMode]         = useState("login"); // "login"|"signup"|"reset"|"new-password"
   const [email, setEmail]       = useState("");
   const [password, setPassword] = useState("");
@@ -16,6 +39,8 @@ export default function Login({ onAuth }) {
   const [loading, setLoading]   = useState(false);
   const [error, setError]       = useState("");
   const [info, setInfo]         = useState("");
+
+  useEffect(() => { getTransparentLogoLogin().then(setLogoSrc); }, []);
 
   // Detect password-reset or email-confirm redirect (Supabase puts tokens in the URL hash)
   useEffect(() => {
@@ -140,9 +165,8 @@ export default function Login({ onAuth }) {
 
         {/* Logo */}
         <div style={{ textAlign:"center", marginBottom:"28px" }}>
-          <div style={{ background:"#fff", borderRadius:"14px", padding:"12px 24px",
-            display:"inline-flex", alignItems:"center", boxShadow:"0 8px 30px rgba(0,0,0,0.25)" }}>
-            <img src={LOGO_SRC} alt="Virtuos Digital" style={{ height:"40px", display:"block" }}/>
+          <div style={{ display:"inline-flex", alignItems:"center" }}>
+            <img src={logoSrc} alt="Virtuos Digital" style={{ height:"48px", display:"block" }}/>
           </div>
           <div style={{ color:"rgba(255,255,255,0.4)", fontSize:"11px", marginTop:"10px",
             textTransform:"uppercase", letterSpacing:"0.12em" }}>Quote Builder</div>
