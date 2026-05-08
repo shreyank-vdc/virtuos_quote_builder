@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { supabase } from "./supabase.js";
+import { supabase, APP_URL } from "./supabase.js";
 import LOGO_SRC from "./logoData.js";
 
 // Use the same transparent-logo cache from App
@@ -92,7 +92,7 @@ export default function Login({ onAuth }) {
       email, password,
       options: {
         data: { full_name: name },
-        emailRedirectTo: window.location.origin,
+        emailRedirectTo: APP_URL,
       }
     });
     setLoading(false);
@@ -107,7 +107,7 @@ export default function Login({ onAuth }) {
     if (!validateEmail(email)) return;
     setLoading(true);
     const { error: err } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: window.location.origin,
+      redirectTo: APP_URL,
     });
     setLoading(false);
     if (err) { setError(err.message); return; }
@@ -136,7 +136,7 @@ export default function Login({ onAuth }) {
     setError(""); setLoading(true);
     const { error: err } = await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo: window.location.origin }
+      options: { redirectTo: APP_URL }
     });
     setLoading(false);
     if (err) setError(err.message);
