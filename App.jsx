@@ -72,11 +72,7 @@ const PRODUCTS = {
   professional_services: {
     label: "Professional Services", color: "#7C3AED", bgColor: "#F5F3FF",
     tiers: [
-      { id: "ps-implementation", name: "Implementation Package", unitPrice: 2500.00, description: "Guided setup and configuration", perUnit: "engagement" },
-      { id: "ps-training",       name: "Training Package",       unitPrice: 1200.00, description: "End-user and admin training",   perUnit: "session" },
-      { id: "ps-consulting",     name: "Strategic Consulting",   unitPrice: 250.00,  description: "Senior consultant",            perUnit: "hour" },
-      { id: "ps-migration",      name: "Data Migration",         unitPrice: 3500.00, description: "Full data migration & validation", perUnit: "engagement" },
-      { id: "ps-integration",    name: "Custom Integration",     unitPrice: 5000.00, description: "API integration with third-party systems", perUnit: "engagement" },
+      { id: "ps-professional", name: "Professional Services", unitPrice: 0, description: "Custom hours-based engagement", perUnit: "hour" },
     ],
     addOns: [],
     tc: `Professional Services engagements are governed by the Virtuos Digital Professional Services Agreement. Services must be scheduled within 90 days of purchase. Unused hours expire at end of engagement period. Travel and expenses billed separately where applicable. All professional services are non-refundable once delivery has commenced. Statement of Work (SOW) required for all fixed-fee engagements.`
@@ -131,8 +127,8 @@ function computeLines(lines, startDate, endDate, billingCycle) {
     const p = PRODUCTS[line.productCategory];
     const all = [...(p?.tiers||[]),...(p?.addOns||[])];
     const item = all.find(i=>i.id===line.itemId);
-    const usd = item?.unitPrice||0;
     const isPro = line.productCategory==="professional_services";
+    const usd = isPro ? (line.ratePerHour||0) : (item?.unitPrice||0);
     const pr = isPro ? 1 : proRataFactor(startDate,endDate,billingCycle);
     const annual = usd*line.qty;
     const effective = isPro ? annual : annual*pr;
@@ -202,10 +198,11 @@ function ProductLine({line,onUpdate,onRemove,billingCycle,startDate,endDate}){
   const p=PRODUCTS[line.productCategory];
   const all=[...(p?.tiers||[]),...(p?.addOns||[])];
   const item=all.find(i=>i.id===line.itemId);
-  const usd=item?.unitPrice||0;
   const isPro=line.productCategory==="professional_services";
   const pr=isPro?1:proRataFactor(startDate,endDate,billingCycle);
-  const effective=isPro?usd*line.qty:usd*line.qty*pr;
+  const ratePerHour=line.ratePerHour||0;
+  const usd=isPro?ratePerHour:(item?.unitPrice||0);
+  const effective=isPro?ratePerHour*line.qty:usd*line.qty*pr;
   const disc=line.discountType==="percent"?effective*(line.discount/100):Math.min(line.discount,effective);
   const net=Math.max(0,effective-disc);
   const full=pr>=0.9972;
@@ -215,16 +212,27 @@ function ProductLine({line,onUpdate,onRemove,billingCycle,startDate,endDate}){
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
         <div style={{display:"flex",gap:"7px",alignItems:"center",flexWrap:"wrap"}}>
           <Badge color={p?.color}>{p?.label}</Badge>
-          {item&&<span style={{fontSize:"13px",fontWeight:600,color:V.ink}}>{item.name}</span>}
+          {!isPro&&item&&<span style={{fontSize:"13px",fontWeight:600,color:V.ink}}>{item.name}</span>}
           {!isPro&&!full&&<Badge color="#D97706">Pro-rata {(pr*100).toFixed(1)}%</Badge>}
         </div>
         <button onClick={onRemove} style={{background:"none",border:"none",cursor:"pointer",color:"#EF4444",fontSize:"18px",padding:"0 4px",lineHeight:1}}>×</button>
       </div>
       <div className="pl-grid">
-        <Sel label="Product / Service" value={line.itemId} onChange={v=>onUpdate({...line,itemId:v})}
-          options={all.map(i=>({value:i.id,label:i.name}))}/>
-        <Inp label={isPro?(item?.perUnit?`Qty (${item.perUnit})`:"Qty"):"Seats"} type="number" min="1"
-          value={line.qty} onChange={v=>onUpdate({...line,qty:Math.max(1,parseInt(v)||1)})} onFocusSelect/>
+        {isPro?(
+          <>
+            <Inp label="Hours" type="number" min="1"
+              value={line.qty} onChange={v=>onUpdate({...line,qty:Math.max(1,parseInt(v)||1)})} onFocusSelect/>
+            <Inp label="Rate per Hour (USD)" type="number" min="0"
+              value={ratePerHour} onChange={v=>onUpdate({...line,ratePerHour:parseFloat(v)||0})} onFocusSelect/>
+          </>
+        ):(
+          <>
+            <Sel label="Product / Service" value={line.itemId} onChange={v=>onUpdate({...line,itemId:v})}
+              options={all.map(i=>({value:i.id,label:i.name}))}/>
+            <Inp label="Seats" type="number" min="1"
+              value={line.qty} onChange={v=>onUpdate({...line,qty:Math.max(1,parseInt(v)||1)})} onFocusSelect/>
+          </>
+        )}
         <div style={{display:"flex",flexDirection:"column",gap:"3px"}}>
           <Label>Discount</Label>
           <div style={{display:"flex"}}>
@@ -239,16 +247,23 @@ function ProductLine({line,onUpdate,onRemove,billingCycle,startDate,endDate}){
             </select>
           </div>
         </div>
-        <div>
-          <Label>Unit (USD/yr)</Label>
-          <div style={{fontSize:"13px",color:V.muted,padding:"8px 0",fontWeight:500}}>{fmt$(usd)}</div>
-        </div>
+        {isPro?(
+          <div>
+            <Label>Total (USD)</Label>
+            <div style={{fontSize:"13px",color:V.muted,padding:"8px 0",fontWeight:500}}>{fmt$(effective)}</div>
+          </div>
+        ):(
+          <div>
+            <Label>Unit (USD/yr)</Label>
+            <div style={{fontSize:"13px",color:V.muted,padding:"8px 0",fontWeight:500}}>{fmt$(usd)}</div>
+          </div>
+        )}
         <div>
           <Label>Net (USD)</Label>
           <div style={{fontSize:"15px",fontWeight:700,color:V.ink,padding:"8px 0"}}>{fmt$(net)}</div>
         </div>
       </div>
-      {item?.description&&<p style={{fontSize:"11.5px",color:"#94A3B8",margin:0}}>{item.description}</p>}
+      {!isPro&&item?.description&&<p style={{fontSize:"11.5px",color:"#94A3B8",margin:0}}>{item.description}</p>}
     </div>
   );
 }
