@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { supabase } from "./supabase.js";
 import LOGO_SRC from "./logoData.js";
 
@@ -1028,7 +1028,7 @@ async function fetchAllQuotes() {
   if (error) { console.error(error); return []; }
   return (data||[]).map(r=>({...r.payload, id:r.id, savedAt:r.saved_at, ownerEmail:r.owner_email, ownerName:r.owner_name}));
 }
-async function upsertQuote(snapshot, user) {
+async function upsertQuote(snapshot, user, accountId) {
   const { error } = await supabase.from("quotes").upsert({
     id: snapshot.id,
     user_id: user.id,
@@ -1036,12 +1036,448 @@ async function upsertQuote(snapshot, user) {
     owner_name: user.user_metadata?.full_name || user.email,
     saved_at: new Date().toISOString(),
     payload: snapshot,
+    account_id: accountId || null,
   }, { onConflict: "id" });
   if (error) console.error(error);
 }
 async function removeQuote(id) {
   const { error } = await supabase.from("quotes").delete().eq("id", id);
   if (error) console.error(error);
+}
+
+// ─── ACCOUNT / CONTACT API ────────────────────────────────────────────────────
+async function searchAccounts(query) {
+  const { data } = await supabase
+    .from("accounts")
+    .select("id, name, industry, country")
+    .ilike("name", `%${query}%`)
+    .order("name")
+    .limit(10);
+  return data || [];
+}
+
+async function fetchAccountWithContacts(accountId) {
+  const [{ data: acc }, { data: contacts }] = await Promise.all([
+    supabase.from("accounts").select("*").eq("id", accountId).single(),
+    supabase.from("contacts").select("*").eq("account_id", accountId).order("is_primary", { ascending: false }),
+  ]);
+  return { account: acc, contacts: contacts || [] };
+}
+
+async function createAccountWithContact({ name, industry, country, website, notes, contactName, contactEmail, contactPhone, contactDesignation }, user) {
+  const { data: acc, error: aErr } = await supabase.from("accounts").insert({
+    name, industry: industry || null, country: country || null, website: website || null,
+    notes: notes || null, created_by: user.id, owner_id: user.id,
+  }).select().single();
+  if (aErr) throw aErr;
+  let contact = null;
+  if (contactName) {
+    const { data: c } = await supabase.from("contacts").insert({
+      account_id: acc.id, name: contactName, email: contactEmail || null,
+      phone: contactPhone || null, designation: contactDesignation || null,
+      is_primary: true, created_by: user.id,
+    }).select().single();
+    contact = c;
+  }
+  return { account: acc, contact };
+}
+
+async function fetchAllAccounts() {
+  const { data, error } = await supabase
+    .from("accounts")
+    .select("id, name, industry, country, website, notes, created_at, contacts(id, name, email, phone, designation, is_primary)")
+    .order("name");
+  if (error) { console.error(error); return []; }
+  return data || [];
+}
+
+async function fetchAccountQuotes(accountId) {
+  const { data } = await supabase
+    .from("quotes")
+    .select("id, saved_at, owner_email, owner_name, payload")
+    .eq("account_id", accountId)
+    .order("saved_at", { ascending: false });
+  return (data || []).map(r => ({ ...r.payload, id: r.id, savedAt: r.saved_at, ownerEmail: r.owner_email, ownerName: r.owner_name }));
+}
+
+// ─── ACCOUNT COMBOBOX ─────────────────────────────────────────────────────────
+const INDUSTRIES = ["Technology","BFSI","Retail","Manufacturing","Healthcare","Education","Media & Entertainment","Government","Real Estate","Logistics","Other"];
+const COUNTRIES  = ["India","United States","United Kingdom","UAE","Singapore","Australia","Germany","France","Japan","Canada","Other"];
+
+function AccountCombobox({ value, onChange, onAccountSelect, user }) {
+  const [query, setQuery]       = useState(value || "");
+  const [results, setResults]   = useState([]);
+  const [open, setOpen]         = useState(false);
+  const [showDrawer, setShowDrawer] = useState(false);
+  const wrapRef = useRef(null);
+
+  useEffect(() => { setQuery(value || ""); }, [value]);
+
+  useEffect(() => {
+    if (!query.trim()) { setResults([]); return; }
+    const t = setTimeout(() => { searchAccounts(query).then(setResults); }, 200);
+    return () => clearTimeout(t);
+  }, [query]);
+
+  useEffect(() => {
+    function away(e) { if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false); }
+    document.addEventListener("mousedown", away);
+    return () => document.removeEventListener("mousedown", away);
+  }, []);
+
+  async function pickAccount(acc) {
+    setQuery(acc.name); onChange(acc.name); setOpen(false);
+    const { contacts } = await fetchAccountWithContacts(acc.id);
+    const primary = contacts.find(c => c.is_primary) || contacts[0] || null;
+    onAccountSelect(acc, primary);
+  }
+
+  const exactMatch = results.some(r => r.name.toLowerCase() === query.toLowerCase());
+
+  return (
+    <>
+      <div ref={wrapRef} style={{ display: "flex", flexDirection: "column", gap: "3px", position: "relative" }}>
+        <Label>Company / Account</Label>
+        <input
+          type="text" value={query}
+          placeholder="Search or create…"
+          style={{ ...IS }}
+          onChange={e => { setQuery(e.target.value); onChange(e.target.value); setOpen(true); }}
+          onFocus={e => { e.target.style.borderColor = V.pink; if (query.trim()) setOpen(true); }}
+          onBlur={e => e.target.style.borderColor = V.border}
+        />
+        {open && (results.length > 0 || query.trim()) && (
+          <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#fff", border: `1.5px solid ${V.border}`, borderRadius: "10px", boxShadow: "0 8px 28px rgba(0,0,0,0.13)", zIndex: 300, marginTop: "4px", overflow: "hidden", maxHeight: "240px", overflowY: "auto" }}>
+            {results.map(acc => (
+              <div key={acc.id} onMouseDown={() => pickAccount(acc)}
+                style={{ padding: "9px 13px", cursor: "pointer", borderBottom: `1px solid ${V.border}` }}
+                onMouseEnter={e => e.currentTarget.style.background = "#F8FAFC"}
+                onMouseLeave={e => e.currentTarget.style.background = "#fff"}>
+                <div style={{ fontSize: "13px", fontWeight: 600, color: V.ink }}>{acc.name}</div>
+                {(acc.industry || acc.country) && (
+                  <div style={{ fontSize: "11px", color: V.muted }}>{[acc.industry, acc.country].filter(Boolean).join(" · ")}</div>
+                )}
+              </div>
+            ))}
+            {!exactMatch && query.trim() && (
+              <div onMouseDown={() => { setShowDrawer(true); setOpen(false); }}
+                style={{ padding: "9px 13px", cursor: "pointer", fontSize: "13px", color: V.pink, fontWeight: 700, display: "flex", alignItems: "center", gap: "6px" }}
+                onMouseEnter={e => e.currentTarget.style.background = "#FFF0F8"}
+                onMouseLeave={e => e.currentTarget.style.background = "#fff"}>
+                + Create "{query}"
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+      {showDrawer && (
+        <AccountDrawer
+          initialName={query} user={user}
+          onSave={({ account, contact }) => { setQuery(account.name); onChange(account.name); onAccountSelect(account, contact); setShowDrawer(false); }}
+          onClose={() => setShowDrawer(false)}
+        />
+      )}
+    </>
+  );
+}
+
+// ─── ACCOUNT CREATION DRAWER ──────────────────────────────────────────────────
+function AccountDrawer({ initialName, user, onSave, onClose }) {
+  const [name,     setName]     = useState(initialName || "");
+  const [industry, setIndustry] = useState("");
+  const [country,  setCountry]  = useState("");
+  const [website,  setWebsite]  = useState("");
+  const [notes,    setNotes]    = useState("");
+  const [cName,    setCName]    = useState("");
+  const [cEmail,   setCEmail]   = useState("");
+  const [cPhone,   setCPhone]   = useState("");
+  const [cDesig,   setCDesig]   = useState("");
+  const [saving,   setSaving]   = useState(false);
+  const [err,      setErr]      = useState("");
+
+  async function save() {
+    if (!name.trim()) { setErr("Account name is required."); return; }
+    setSaving(true); setErr("");
+    try {
+      const result = await createAccountWithContact({
+        name: name.trim(), industry, country, website, notes,
+        contactName: cName, contactEmail: cEmail, contactPhone: cPhone, contactDesignation: cDesig,
+      }, user);
+      onSave(result);
+    } catch(e) {
+      setErr(e.message || "Failed to create account."); setSaving(false);
+    }
+  }
+
+  const selStyle = { ...IS, background: V.white, cursor: "pointer" };
+
+  return (
+    <>
+      <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.38)", zIndex: 400 }}/>
+      <div style={{ position: "fixed", top: 0, right: 0, bottom: 0, width: "min(440px,100vw)", background: "#fff", zIndex: 401, display: "flex", flexDirection: "column", boxShadow: "-12px 0 48px rgba(0,0,0,0.18)", fontFamily: "'DM Sans',system-ui,sans-serif" }}>
+        <div style={{ padding: "20px 24px 16px", borderBottom: `1px solid ${V.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={{ fontSize: "15px", fontWeight: 800, color: V.navy }}>New Account</div>
+          <button onClick={onClose} style={{ background: "none", border: "none", fontSize: "22px", cursor: "pointer", color: V.muted, lineHeight: 1, padding: "0 4px" }}>×</button>
+        </div>
+        <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px", display: "flex", flexDirection: "column", gap: "12px" }}>
+          <div style={{ fontSize: "10.5px", fontWeight: 800, color: V.muted, textTransform: "uppercase", letterSpacing: "0.08em" }}>Account Details</div>
+          <Inp label="Account Name *" value={name} onChange={setName} placeholder="Acme Corp"/>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
+              <Label>Industry</Label>
+              <select value={industry} onChange={e => setIndustry(e.target.value)} style={selStyle}
+                onFocus={e => e.target.style.borderColor = V.pink} onBlur={e => e.target.style.borderColor = V.border}>
+                <option value="">— Select —</option>
+                {INDUSTRIES.map(i => <option key={i}>{i}</option>)}
+              </select>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
+              <Label>Country</Label>
+              <select value={country} onChange={e => setCountry(e.target.value)} style={selStyle}
+                onFocus={e => e.target.style.borderColor = V.pink} onBlur={e => e.target.style.borderColor = V.border}>
+                <option value="">— Select —</option>
+                {COUNTRIES.map(c => <option key={c}>{c}</option>)}
+              </select>
+            </div>
+          </div>
+          <Inp label="Website" value={website} onChange={setWebsite} placeholder="https://acme.com"/>
+
+          <div style={{ borderTop: `1px solid ${V.border}`, paddingTop: "14px", marginTop: "2px" }}>
+            <div style={{ fontSize: "10.5px", fontWeight: 800, color: V.muted, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "12px" }}>Primary Contact <span style={{ color: "#CBD5E1", fontWeight: 400 }}>(optional)</span></div>
+            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+              <Inp label="Name" value={cName} onChange={setCName} placeholder="Jane Smith"/>
+              <Inp label="Email" type="email" value={cEmail} onChange={setCEmail} placeholder="jane@acme.com"/>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                <Inp label="Phone" value={cPhone} onChange={setCPhone} placeholder="+91 98765 43210"/>
+                <Inp label="Designation" value={cDesig} onChange={setCDesig} placeholder="IT Manager"/>
+              </div>
+            </div>
+          </div>
+
+          <div style={{ borderTop: `1px solid ${V.border}`, paddingTop: "14px", marginTop: "2px" }}>
+            <Inp label="Internal Notes" value={notes} onChange={setNotes} placeholder="Any internal notes…"/>
+          </div>
+        </div>
+        {err && <div style={{ padding: "8px 24px", background: "#FEF2F2", color: "#DC2626", fontSize: "12px", fontFamily: "inherit" }}>{err}</div>}
+        <div style={{ padding: "16px 24px", borderTop: `1px solid ${V.border}`, display: "flex", gap: "10px", justifyContent: "flex-end" }}>
+          <button onClick={onClose} style={{ padding: "9px 18px", background: "#F1F5F9", color: V.muted, border: `1px solid ${V.border}`, borderRadius: "8px", cursor: "pointer", fontSize: "13px", fontFamily: "inherit" }}>Cancel</button>
+          <button onClick={save} disabled={saving} style={{ padding: "9px 22px", background: saving ? "#94A3B8" : "linear-gradient(135deg,#E84B9C,#F97316)", color: "#fff", border: "none", borderRadius: "8px", cursor: saving ? "not-allowed" : "pointer", fontSize: "13px", fontWeight: 700, fontFamily: "inherit" }}>
+            {saving ? "Saving…" : "Create Account"}
+          </button>
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ─── ACCOUNTS VIEW ────────────────────────────────────────────────────────────
+function AccountsView({ onBack, onLoadQuote, user }) {
+  const [accounts,      setAccounts]      = useState([]);
+  const [loading,       setLoading]       = useState(true);
+  const [search,        setSearch]        = useState("");
+  const [selected,      setSelected]      = useState(null);
+  const [acctQuotes,    setAcctQuotes]    = useState([]);
+  const [quotesLoading, setQuotesLoading] = useState(false);
+  const [showDrawer,    setShowDrawer]    = useState(false);
+
+  const reload = useCallback(() => {
+    setLoading(true);
+    fetchAllAccounts().then(a => { setAccounts(a); setLoading(false); });
+  }, []);
+
+  useEffect(() => { reload(); }, [reload]);
+
+  function openAccount(acc) {
+    setSelected(acc); setQuotesLoading(true);
+    fetchAccountQuotes(acc.id).then(q => { setAcctQuotes(q); setQuotesLoading(false); });
+  }
+
+  const filtered = accounts.filter(a => {
+    const s = search.toLowerCase();
+    return !s || a.name.toLowerCase().includes(s) || (a.industry||"").toLowerCase().includes(s) || (a.country||"").toLowerCase().includes(s);
+  });
+
+  const navBar = (extra) => (
+    <div className="qb-nav">
+      <div className="qb-nav-left">
+        <VirtuosLogo height={26}/>
+        <div style={{ width: "1px", height: "28px", background: "rgba(255,255,255,0.12)", flexShrink: 0 }}/>
+        <div className="qb-nav-title">
+          <div style={{ color: "#fff", fontWeight: 700, fontSize: "14px" }}>Accounts</div>
+          <div className="qb-nav-subtitle" style={{ color: "rgba(255,255,255,0.4)", fontSize: "10.5px" }}>Customer Database</div>
+        </div>
+      </div>
+      <div className="qb-nav-right">{extra}</div>
+    </div>
+  );
+
+  if (selected) {
+    const primary = (selected.contacts||[]).find(c => c.is_primary) || (selected.contacts||[])[0];
+    return (
+      <div className="qb-shell">
+        <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap'); *{box-sizing:border-box;} .qb-shell{min-height:100vh;background:#F1F5F9;font-family:'DM Sans',system-ui,sans-serif;} .qb-nav{background:linear-gradient(90deg,#0D1B3E,#162447);height:58px;display:flex;align-items:center;justify-content:space-between;padding:0 20px;position:sticky;top:0;z-index:100;box-shadow:0 2px 12px rgba(13,27,62,0.4);gap:10px;} .qb-nav-left{display:flex;align-items:center;gap:12px;} .qb-nav-title{line-height:1.2;} .qb-nav-right{display:flex;gap:8px;align-items:center;} .qb-nav-subtitle{display:block;} @media(max-width:600px){.qb-nav-subtitle{display:none;}}`}</style>
+        {navBar(
+          <>
+            <button onClick={() => setSelected(null)} style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.15)", color: "rgba(255,255,255,0.75)", padding: "6px 12px", borderRadius: "6px", cursor: "pointer", fontSize: "12px", fontWeight: 600, fontFamily: "inherit" }}>← Accounts</button>
+            <button onClick={onBack} style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", color: "rgba(255,255,255,0.55)", padding: "6px 12px", borderRadius: "6px", cursor: "pointer", fontSize: "12px", fontFamily: "inherit" }}>Builder</button>
+          </>
+        )}
+        <div style={{ maxWidth: "900px", margin: "0 auto", padding: "24px 20px", display: "flex", flexDirection: "column", gap: "16px" }}>
+          {/* Account header card */}
+          <div style={{ background: "linear-gradient(135deg,#0D1B3E,#1A2C55)", borderRadius: "14px", padding: "24px 28px", color: "#fff" }}>
+            <div style={{ fontSize: "22px", fontWeight: 800 }}>{selected.name}</div>
+            <div style={{ display: "flex", gap: "16px", marginTop: "8px", flexWrap: "wrap" }}>
+              {selected.industry && <span style={{ fontSize: "12px", color: "rgba(255,255,255,0.55)" }}>{selected.industry}</span>}
+              {selected.country  && <span style={{ fontSize: "12px", color: "rgba(255,255,255,0.55)" }}>📍 {selected.country}</span>}
+              {selected.website  && <a href={selected.website} target="_blank" rel="noreferrer" style={{ fontSize: "12px", color: "#93C5FD" }}>{selected.website}</a>}
+            </div>
+            {selected.notes && <div style={{ marginTop: "10px", fontSize: "12.5px", color: "rgba(255,255,255,0.45)", fontStyle: "italic" }}>{selected.notes}</div>}
+          </div>
+
+          {/* Contacts */}
+          <div style={{ background: "#fff", borderRadius: "12px", border: `1px solid ${V.border}`, overflow: "hidden" }}>
+            <div style={{ padding: "14px 20px", borderBottom: `1px solid ${V.border}`, fontSize: "11px", fontWeight: 800, color: V.ink, textTransform: "uppercase", letterSpacing: "0.07em" }}>
+              Contacts · {(selected.contacts||[]).length}
+            </div>
+            {(selected.contacts||[]).length === 0 ? (
+              <div style={{ padding: "24px 20px", textAlign: "center", color: V.muted, fontSize: "13px" }}>No contacts on record</div>
+            ) : (
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead>
+                  <tr style={{ background: "#F8FAFC" }}>
+                    {["Name","Designation","Email","Phone"].map(h => (
+                      <th key={h} style={{ padding: "9px 16px", textAlign: "left", fontSize: "10.5px", fontWeight: 700, color: V.muted, textTransform: "uppercase", letterSpacing: "0.06em", borderBottom: `1px solid ${V.border}` }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {(selected.contacts||[]).map(c => (
+                    <tr key={c.id} style={{ borderBottom: `1px solid ${V.border}` }}>
+                      <td style={{ padding: "10px 16px" }}>
+                        <div style={{ fontWeight: 600, fontSize: "13px", color: V.ink, display: "flex", alignItems: "center", gap: "6px" }}>
+                          {c.name}
+                          {c.is_primary && <span style={{ fontSize: "9px", fontWeight: 700, background: "#E84B9C18", color: "#E84B9C", padding: "1px 6px", borderRadius: "99px", textTransform: "uppercase", letterSpacing: "0.06em" }}>Primary</span>}
+                        </div>
+                      </td>
+                      <td style={{ padding: "10px 16px", fontSize: "12px", color: V.muted }}>{c.designation || "—"}</td>
+                      <td style={{ padding: "10px 16px", fontSize: "12px", color: V.muted }}>{c.email || "—"}</td>
+                      <td style={{ padding: "10px 16px", fontSize: "12px", color: V.muted }}>{c.phone || "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+
+          {/* Quote history for this account */}
+          <div style={{ background: "#fff", borderRadius: "12px", border: `1px solid ${V.border}`, overflow: "hidden" }}>
+            <div style={{ padding: "14px 20px", borderBottom: `1px solid ${V.border}`, fontSize: "11px", fontWeight: 800, color: V.ink, textTransform: "uppercase", letterSpacing: "0.07em" }}>
+              Quote History
+            </div>
+            {quotesLoading ? (
+              <div style={{ padding: "24px 20px", textAlign: "center", color: V.muted, fontSize: "13px" }}>Loading…</div>
+            ) : acctQuotes.length === 0 ? (
+              <div style={{ padding: "24px 20px", textAlign: "center", color: V.muted, fontSize: "13px" }}>No quotes linked to this account yet</div>
+            ) : (
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead>
+                  <tr style={{ background: "#F8FAFC" }}>
+                    {["Quote ID","Quote Name","Value","Date","Owner"].map(h => (
+                      <th key={h} style={{ padding: "9px 16px", textAlign: "left", fontSize: "10.5px", fontWeight: 700, color: V.muted, textTransform: "uppercase", letterSpacing: "0.06em", borderBottom: `1px solid ${V.border}` }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {acctQuotes.map(q => (
+                    <tr key={q.id} style={{ borderBottom: `1px solid ${V.border}`, cursor: "pointer" }}
+                      onMouseEnter={e => e.currentTarget.style.background = "#F8FAFC"}
+                      onMouseLeave={e => e.currentTarget.style.background = "#fff"}
+                      onClick={() => onLoadQuote(q)}>
+                      <td style={{ padding: "10px 16px", fontFamily: "monospace", fontSize: "11.5px", color: V.muted }}>{q.id}</td>
+                      <td style={{ padding: "10px 16px", fontSize: "13px", fontWeight: 600, color: V.ink }}>{q.quoteName || "—"}</td>
+                      <td style={{ padding: "10px 16px", fontSize: "13px", color: V.ink }}>${(q.grandLocal||0).toLocaleString("en-US",{minimumFractionDigits:2})}</td>
+                      <td style={{ padding: "10px 16px", fontSize: "12px", color: V.muted }}>{q.savedAt ? new Date(q.savedAt).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}) : "—"}</td>
+                      <td style={{ padding: "10px 16px", fontSize: "12px", color: V.muted }}>{q.owner || q.ownerName || "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="qb-shell">
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap'); *{box-sizing:border-box;} .qb-shell{min-height:100vh;background:#F1F5F9;font-family:'DM Sans',system-ui,sans-serif;} .qb-nav{background:linear-gradient(90deg,#0D1B3E,#162447);height:58px;display:flex;align-items:center;justify-content:space-between;padding:0 20px;position:sticky;top:0;z-index:100;box-shadow:0 2px 12px rgba(13,27,62,0.4);gap:10px;} .qb-nav-left{display:flex;align-items:center;gap:12px;} .qb-nav-title{line-height:1.2;} .qb-nav-right{display:flex;gap:8px;align-items:center;} .qb-nav-subtitle{display:block;} @media(max-width:600px){.qb-nav-subtitle{display:none;}}`}</style>
+      {navBar(
+        <>
+          <button onClick={() => setShowDrawer(true)} style={{ background: "linear-gradient(135deg,#E84B9C,#F97316)", border: "none", color: "#fff", padding: "6px 14px", borderRadius: "6px", cursor: "pointer", fontSize: "12px", fontWeight: 700, fontFamily: "inherit" }}>+ New Account</button>
+          <button onClick={onBack} style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", color: "rgba(255,255,255,0.55)", padding: "6px 12px", borderRadius: "6px", cursor: "pointer", fontSize: "12px", fontFamily: "inherit" }}>Builder</button>
+        </>
+      )}
+      <div style={{ maxWidth: "1000px", margin: "0 auto", padding: "24px 20px" }}>
+        <div style={{ display: "flex", gap: "10px", marginBottom: "16px", flexWrap: "wrap", alignItems: "center" }}>
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by name, industry, country…"
+            style={{ flex: 1, minWidth: "200px", ...IS, fontSize: "13px" }}
+            onFocus={e => e.target.style.borderColor = V.pink} onBlur={e => e.target.style.borderColor = V.border}/>
+          <span style={{ fontSize: "12px", color: V.muted, whiteSpace: "nowrap" }}>{filtered.length} account{filtered.length !== 1 ? "s" : ""}</span>
+        </div>
+        <div style={{ background: "#fff", borderRadius: "12px", border: `1px solid ${V.border}`, overflow: "hidden" }}>
+          {loading ? (
+            <div style={{ padding: "48px", textAlign: "center", color: V.muted }}>Loading…</div>
+          ) : filtered.length === 0 ? (
+            <div style={{ padding: "48px", textAlign: "center" }}>
+              <div style={{ fontSize: "32px", marginBottom: "8px" }}>🏢</div>
+              <div style={{ fontSize: "14px", fontWeight: 700, color: V.ink }}>No accounts yet</div>
+              <div style={{ fontSize: "12px", color: V.muted, marginTop: "4px" }}>Create an account from the quote builder or use the button above</div>
+            </div>
+          ) : (
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead>
+                <tr style={{ background: "#F8FAFC" }}>
+                  {["Account","Industry","Country","Contacts","Actions"].map(h => (
+                    <th key={h} style={{ padding: "10px 16px", textAlign: "left", fontSize: "10.5px", fontWeight: 700, color: V.muted, textTransform: "uppercase", letterSpacing: "0.06em", borderBottom: `1px solid ${V.border}`, whiteSpace: "nowrap" }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map(acc => (
+                  <tr key={acc.id} style={{ borderBottom: `1px solid ${V.border}`, cursor: "pointer" }}
+                    onMouseEnter={e => e.currentTarget.style.background = "#F8FAFC"}
+                    onMouseLeave={e => e.currentTarget.style.background = "#fff"}
+                    onClick={() => openAccount(acc)}>
+                    <td style={{ padding: "12px 16px" }}>
+                      <div style={{ fontWeight: 700, fontSize: "13px", color: V.ink }}>{acc.name}</div>
+                      {acc.website && <div style={{ fontSize: "11px", color: "#93C5FD", marginTop: "1px" }}>{acc.website}</div>}
+                    </td>
+                    <td style={{ padding: "12px 16px", fontSize: "12px", color: V.muted }}>{acc.industry || "—"}</td>
+                    <td style={{ padding: "12px 16px", fontSize: "12px", color: V.muted }}>{acc.country || "—"}</td>
+                    <td style={{ padding: "12px 16px", fontSize: "12px", color: V.muted }}>{(acc.contacts||[]).length}</td>
+                    <td style={{ padding: "12px 16px" }}>
+                      <button onClick={e => { e.stopPropagation(); openAccount(acc); }}
+                        style={{ fontSize: "12px", padding: "4px 10px", border: `1px solid ${V.border}`, borderRadius: "6px", background: "#F8FAFC", cursor: "pointer", color: V.ink, fontFamily: "inherit" }}>
+                        View →
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+      {showDrawer && (
+        <AccountDrawer
+          initialName="" user={user}
+          onSave={() => { setShowDrawer(false); reload(); }}
+          onClose={() => setShowDrawer(false)}
+        />
+      )}
+    </div>
+  );
 }
 
 // ─── QUOTE HISTORY VIEW ───────────────────────────────────────────────────────
@@ -1241,8 +1677,9 @@ function QuoteHistory({onNewQuote, onLoadQuote, onSignOut, user}){
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
 export default function QuoteBuilder({ user, onSignOut }){
   const today=new Date().toISOString().split("T")[0];
-  const [view,setView]=useState("builder"); // "builder" | "history"
+  const [view,setView]=useState("builder"); // "builder" | "history" | "accounts"
   const [customer,setCustomer]=useState({name:"",company:"",email:"",phone:""});
+  const [accountId,setAccountId]=useState(null);
   const [paymentTerms,setPaymentTerms]=useState("100% Advance");
   const [qd,setQd]=useState({quoteId:generateQuoteId(),quoteName:"",createdOn:new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}),owner:"",notes:"",validUntil:""});
   const [lines,setLines]=useState([]);
@@ -1265,13 +1702,14 @@ export default function QuoteBuilder({ user, onSignOut }){
       id:qd.quoteId, quoteName:qd.quoteName, createdOn:qd.createdOn, validUntil:qd.validUntil,
       owner:qd.owner||user?.user_metadata?.full_name||user?.email, notes:qd.notes,
       customer, currency, billingCycle, monthCount, startDate, endDate, taxConfig, paymentTerms,
-      lines, subUSD, grandLocal:subUSD*currency.rate,
+      lines, subUSD, grandLocal:subUSD*currency.rate, accountId,
     };
-    upsertQuote(snapshot, user);
+    upsertQuote(snapshot, user, accountId);
   }
 
   function loadQuote(q){
     setCustomer(q.customer||{name:"",company:"",email:"",phone:""});
+    setAccountId(q.accountId||null);
     setPaymentTerms(q.paymentTerms||"100% Advance");
     setQd({quoteId:q.id,quoteName:q.quoteName||"",createdOn:q.createdOn||"",owner:q.owner||"",notes:q.notes||"",validUntil:q.validUntil||""});
     setLines(q.lines||[]);
@@ -1302,7 +1740,8 @@ export default function QuoteBuilder({ user, onSignOut }){
   const days=daysBetween(startDate,endDate);
   const prPct=billingCycle!=="annual"?`Pro-rata: ${(proRataFactor(startDate,endDate,billingCycle)*100).toFixed(1)}%`:null;
 
-  if(view==="history") return <QuoteHistory onNewQuote={()=>{setQd(q=>({...q,quoteId:generateQuoteId()}));setLines([]);setView("builder");}} onLoadQuote={loadQuote} onSignOut={onSignOut} user={user}/>;
+  if(view==="history")  return <QuoteHistory onNewQuote={()=>{setQd(q=>({...q,quoteId:generateQuoteId()}));setLines([]);setView("builder");}} onLoadQuote={loadQuote} onSignOut={onSignOut} user={user}/>;
+  if(view==="accounts") return <AccountsView onBack={()=>setView("builder")} onLoadQuote={q=>{loadQuote(q);setView("builder");}} user={user}/>;
 
   return(
     <div className="qb-shell">
@@ -1395,6 +1834,10 @@ export default function QuoteBuilder({ user, onSignOut }){
           <span style={{color:"rgba(255,255,255,0.4)",fontSize:"11.5px",whiteSpace:"nowrap"}} className="qb-nav-subtitle">
             {user?.user_metadata?.full_name||user?.email}
           </span>
+          <button onClick={()=>setView("accounts")}
+            style={{background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.75)",padding:"6px 12px",borderRadius:"6px",cursor:"pointer",fontSize:"12px",fontWeight:600,fontFamily:"inherit",flexShrink:0,whiteSpace:"nowrap"}}>
+            🏢 Accounts
+          </button>
           <button onClick={()=>setView("history")}
             style={{background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.75)",padding:"6px 12px",borderRadius:"6px",cursor:"pointer",fontSize:"12px",fontWeight:600,fontFamily:"inherit",flexShrink:0,whiteSpace:"nowrap"}}>
             📋 History
@@ -1421,7 +1864,21 @@ export default function QuoteBuilder({ user, onSignOut }){
           {/* LEFT */}
           <div style={{display:"flex",flexDirection:"column",gap:"12px"}}>
             <Panel title="Customer" icon="👤">
-              <Inp label="Company / Account" value={customer.company} onChange={v=>setCustomer(c=>({...c,company:v}))} placeholder="Acme Corp"/>
+              <AccountCombobox
+                value={customer.company}
+                onChange={v => setCustomer(c=>({...c, company: v}))}
+                onAccountSelect={(acc, contact) => {
+                  setAccountId(acc.id);
+                  setCustomer(c => ({
+                    ...c,
+                    company: acc.name,
+                    name:    contact?.name  || c.name,
+                    email:   contact?.email || c.email,
+                    phone:   contact?.phone || c.phone,
+                  }));
+                }}
+                user={user}
+              />
               <Inp label="Contact Name" value={customer.name} onChange={v=>setCustomer(c=>({...c,name:v}))} placeholder="Jane Smith"/>
               <Inp label="Email" type="email" value={customer.email} onChange={v=>setCustomer(c=>({...c,email:v}))} placeholder="jane@acme.com"/>
               <Inp label="Phone" value={customer.phone} onChange={v=>setCustomer(c=>({...c,phone:v}))} placeholder="+91 98765 43210"/>
