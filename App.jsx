@@ -1271,7 +1271,7 @@ function AccountDrawer({ initialName, user, onSave, onClose }) {
 }
 
 // ─── ACCOUNTS VIEW ────────────────────────────────────────────────────────────
-function AccountsView({ onBack, onLoadQuote, user }) {
+function AccountsView({ onLoadQuote, user }) {
   const [accounts,      setAccounts]      = useState([]);
   const [loading,       setLoading]       = useState(true);
   const [search,        setSearch]        = useState("");
@@ -1297,171 +1297,87 @@ function AccountsView({ onBack, onLoadQuote, user }) {
     return !s || a.name.toLowerCase().includes(s) || (a.industry||"").toLowerCase().includes(s) || (a.country||"").toLowerCase().includes(s);
   });
 
-  const navBar = (extra) => (
-    <div className="qb-nav">
-      <div className="qb-nav-left">
-        <VirtuosLogo height={26}/>
-        <div style={{ width: "1px", height: "28px", background: "rgba(255,255,255,0.12)", flexShrink: 0 }}/>
-        <div className="qb-nav-title">
-          <div style={{ color: "#fff", fontWeight: 700, fontSize: "14px" }}>Accounts</div>
-          <div className="qb-nav-subtitle" style={{ color: "rgba(255,255,255,0.4)", fontSize: "10.5px" }}>Customer Database</div>
-        </div>
-      </div>
-      <div className="qb-nav-right">{extra}</div>
-    </div>
-  );
-
   if (selected) {
-    const primary = (selected.contacts||[]).find(c => c.is_primary) || (selected.contacts||[])[0];
     return (
-      <div className="qb-shell">
-        <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap'); *{box-sizing:border-box;} .qb-shell{min-height:100vh;background:#F1F5F9;font-family:'DM Sans',system-ui,sans-serif;} .qb-nav{background:linear-gradient(90deg,#0D1B3E,#162447);height:58px;display:flex;align-items:center;justify-content:space-between;padding:0 20px;position:sticky;top:0;z-index:100;box-shadow:0 2px 12px rgba(13,27,62,0.4);gap:10px;} .qb-nav-left{display:flex;align-items:center;gap:12px;} .qb-nav-title{line-height:1.2;} .qb-nav-right{display:flex;gap:8px;align-items:center;} .qb-nav-subtitle{display:block;} @media(max-width:600px){.qb-nav-subtitle{display:none;}}`}</style>
-        {navBar(
-          <>
-            <button onClick={() => setSelected(null)} style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.15)", color: "rgba(255,255,255,0.75)", padding: "6px 12px", borderRadius: "6px", cursor: "pointer", fontSize: "12px", fontWeight: 600, fontFamily: "inherit" }}>← Accounts</button>
-            <button onClick={onBack} style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", color: "rgba(255,255,255,0.55)", padding: "6px 12px", borderRadius: "6px", cursor: "pointer", fontSize: "12px", fontFamily: "inherit" }}>Builder</button>
-          </>
-        )}
-        <div style={{ maxWidth: "900px", margin: "0 auto", padding: "24px 20px", display: "flex", flexDirection: "column", gap: "16px" }}>
-          {/* Account header card */}
-          <div style={{ background: "linear-gradient(135deg,#0D1B3E,#1A2C55)", borderRadius: "14px", padding: "24px 28px", color: "#fff" }}>
-            <div style={{ fontSize: "22px", fontWeight: 800 }}>{selected.name}</div>
-            <div style={{ display: "flex", gap: "16px", marginTop: "8px", flexWrap: "wrap" }}>
-              {selected.industry && <span style={{ fontSize: "12px", color: "rgba(255,255,255,0.55)" }}>{selected.industry}</span>}
-              {selected.country  && <span style={{ fontSize: "12px", color: "rgba(255,255,255,0.55)" }}>📍 {selected.country}</span>}
-              {selected.website  && <a href={selected.website} target="_blank" rel="noreferrer" style={{ fontSize: "12px", color: "#93C5FD" }}>{selected.website}</a>}
-            </div>
-            {selected.notes && <div style={{ marginTop: "10px", fontSize: "12.5px", color: "rgba(255,255,255,0.45)", fontStyle: "italic" }}>{selected.notes}</div>}
-          </div>
+      <div style={{ padding: "28px 32px", maxWidth: "960px" }}>
+        <button onClick={() => setSelected(null)}
+          style={{ display: "inline-flex", alignItems: "center", gap: "6px", background: "none", border: "none", color: V.muted, cursor: "pointer", fontSize: "13px", fontFamily: "inherit", marginBottom: "20px", padding: 0 }}>
+          ← Back to Accounts
+        </button>
 
-          {/* Contacts */}
-          <div style={{ background: "#fff", borderRadius: "12px", border: `1px solid ${V.border}`, overflow: "hidden" }}>
-            <div style={{ padding: "14px 20px", borderBottom: `1px solid ${V.border}`, fontSize: "11px", fontWeight: 800, color: V.ink, textTransform: "uppercase", letterSpacing: "0.07em" }}>
-              Contacts · {(selected.contacts||[]).length}
-            </div>
-            {(selected.contacts||[]).length === 0 ? (
-              <div style={{ padding: "24px 20px", textAlign: "center", color: V.muted, fontSize: "13px" }}>No contacts on record</div>
-            ) : (
-              <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                <thead>
-                  <tr style={{ background: "#F8FAFC" }}>
-                    {["Name","Designation","Email","Phone"].map(h => (
-                      <th key={h} style={{ padding: "9px 16px", textAlign: "left", fontSize: "10.5px", fontWeight: 700, color: V.muted, textTransform: "uppercase", letterSpacing: "0.06em", borderBottom: `1px solid ${V.border}` }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {(selected.contacts||[]).map(c => (
-                    <tr key={c.id} style={{ borderBottom: `1px solid ${V.border}` }}>
-                      <td style={{ padding: "10px 16px" }}>
-                        <div style={{ fontWeight: 600, fontSize: "13px", color: V.ink, display: "flex", alignItems: "center", gap: "6px" }}>
-                          {c.name}
-                          {c.is_primary && <span style={{ fontSize: "9px", fontWeight: 700, background: "#E84B9C18", color: "#E84B9C", padding: "1px 6px", borderRadius: "99px", textTransform: "uppercase", letterSpacing: "0.06em" }}>Primary</span>}
-                        </div>
-                      </td>
-                      <td style={{ padding: "10px 16px", fontSize: "12px", color: V.muted }}>{c.designation || "—"}</td>
-                      <td style={{ padding: "10px 16px", fontSize: "12px", color: V.muted }}>{c.email || "—"}</td>
-                      <td style={{ padding: "10px 16px", fontSize: "12px", color: V.muted }}>{c.phone || "—"}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
+        {/* Account header */}
+        <div style={{ background: "linear-gradient(135deg,#0D1B3E,#1A2C55)", borderRadius: "16px", padding: "24px 28px", color: "#fff", marginBottom: "18px" }}>
+          <div style={{ fontSize: "22px", fontWeight: 800, marginBottom: "8px" }}>{selected.name}</div>
+          <div style={{ display: "flex", gap: "18px", flexWrap: "wrap" }}>
+            {selected.industry && <span style={{ fontSize: "12px", color: "rgba(255,255,255,0.5)", display: "flex", alignItems: "center", gap: "5px" }}>⬡ {selected.industry}</span>}
+            {selected.country  && <span style={{ fontSize: "12px", color: "rgba(255,255,255,0.5)" }}>📍 {selected.country}</span>}
+            {selected.website  && <a href={selected.website} target="_blank" rel="noreferrer" style={{ fontSize: "12px", color: "#93C5FD" }}>{selected.website}</a>}
           </div>
-
-          {/* Quote history for this account */}
-          <div style={{ background: "#fff", borderRadius: "12px", border: `1px solid ${V.border}`, overflow: "hidden" }}>
-            <div style={{ padding: "14px 20px", borderBottom: `1px solid ${V.border}`, fontSize: "11px", fontWeight: 800, color: V.ink, textTransform: "uppercase", letterSpacing: "0.07em" }}>
-              Quote History
-            </div>
-            {quotesLoading ? (
-              <div style={{ padding: "24px 20px", textAlign: "center", color: V.muted, fontSize: "13px" }}>Loading…</div>
-            ) : acctQuotes.length === 0 ? (
-              <div style={{ padding: "24px 20px", textAlign: "center", color: V.muted, fontSize: "13px" }}>No quotes linked to this account yet</div>
-            ) : (
-              <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                <thead>
-                  <tr style={{ background: "#F8FAFC" }}>
-                    {["Quote ID","Quote Name","Value","Date","Owner"].map(h => (
-                      <th key={h} style={{ padding: "9px 16px", textAlign: "left", fontSize: "10.5px", fontWeight: 700, color: V.muted, textTransform: "uppercase", letterSpacing: "0.06em", borderBottom: `1px solid ${V.border}` }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {acctQuotes.map(q => (
-                    <tr key={q.id} style={{ borderBottom: `1px solid ${V.border}`, cursor: "pointer" }}
-                      onMouseEnter={e => e.currentTarget.style.background = "#F8FAFC"}
-                      onMouseLeave={e => e.currentTarget.style.background = "#fff"}
-                      onClick={() => onLoadQuote(q)}>
-                      <td style={{ padding: "10px 16px", fontFamily: "monospace", fontSize: "11.5px", color: V.muted }}>{q.id}</td>
-                      <td style={{ padding: "10px 16px", fontSize: "13px", fontWeight: 600, color: V.ink }}>{q.quoteName || "—"}</td>
-                      <td style={{ padding: "10px 16px", fontSize: "13px", color: V.ink }}>${(q.grandLocal||0).toLocaleString("en-US",{minimumFractionDigits:2})}</td>
-                      <td style={{ padding: "10px 16px", fontSize: "12px", color: V.muted }}>{q.savedAt ? new Date(q.savedAt).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}) : "—"}</td>
-                      <td style={{ padding: "10px 16px", fontSize: "12px", color: V.muted }}>{q.owner || q.ownerName || "—"}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
+          {selected.notes && <div style={{ marginTop: "12px", fontSize: "12.5px", color: "rgba(255,255,255,0.4)", fontStyle: "italic" }}>{selected.notes}</div>}
         </div>
-      </div>
-    );
-  }
 
-  return (
-    <div className="qb-shell">
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap'); *{box-sizing:border-box;} .qb-shell{min-height:100vh;background:#F1F5F9;font-family:'DM Sans',system-ui,sans-serif;} .qb-nav{background:linear-gradient(90deg,#0D1B3E,#162447);height:58px;display:flex;align-items:center;justify-content:space-between;padding:0 20px;position:sticky;top:0;z-index:100;box-shadow:0 2px 12px rgba(13,27,62,0.4);gap:10px;} .qb-nav-left{display:flex;align-items:center;gap:12px;} .qb-nav-title{line-height:1.2;} .qb-nav-right{display:flex;gap:8px;align-items:center;} .qb-nav-subtitle{display:block;} @media(max-width:600px){.qb-nav-subtitle{display:none;}}`}</style>
-      {navBar(
-        <>
-          <button onClick={() => setShowDrawer(true)} style={{ background: "linear-gradient(135deg,#E84B9C,#F97316)", border: "none", color: "#fff", padding: "6px 14px", borderRadius: "6px", cursor: "pointer", fontSize: "12px", fontWeight: 700, fontFamily: "inherit" }}>+ New Account</button>
-          <button onClick={onBack} style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", color: "rgba(255,255,255,0.55)", padding: "6px 12px", borderRadius: "6px", cursor: "pointer", fontSize: "12px", fontFamily: "inherit" }}>Builder</button>
-        </>
-      )}
-      <div style={{ maxWidth: "1000px", margin: "0 auto", padding: "24px 20px" }}>
-        <div style={{ display: "flex", gap: "10px", marginBottom: "16px", flexWrap: "wrap", alignItems: "center" }}>
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by name, industry, country…"
-            style={{ flex: 1, minWidth: "200px", ...IS, fontSize: "13px" }}
-            onFocus={e => e.target.style.borderColor = V.pink} onBlur={e => e.target.style.borderColor = V.border}/>
-          <span style={{ fontSize: "12px", color: V.muted, whiteSpace: "nowrap" }}>{filtered.length} account{filtered.length !== 1 ? "s" : ""}</span>
-        </div>
-        <div style={{ background: "#fff", borderRadius: "12px", border: `1px solid ${V.border}`, overflow: "hidden" }}>
-          {loading ? (
-            <div style={{ padding: "48px", textAlign: "center", color: V.muted }}>Loading…</div>
-          ) : filtered.length === 0 ? (
-            <div style={{ padding: "48px", textAlign: "center" }}>
-              <div style={{ fontSize: "32px", marginBottom: "8px" }}>🏢</div>
-              <div style={{ fontSize: "14px", fontWeight: 700, color: V.ink }}>No accounts yet</div>
-              <div style={{ fontSize: "12px", color: V.muted, marginTop: "4px" }}>Create an account from the quote builder or use the button above</div>
-            </div>
+        {/* Contacts */}
+        <div style={{ background: "#fff", borderRadius: "12px", border: `1px solid ${V.border}`, overflow: "hidden", marginBottom: "16px" }}>
+          <div style={{ padding: "14px 20px", borderBottom: `1px solid ${V.border}`, fontSize: "11px", fontWeight: 800, color: V.ink, textTransform: "uppercase", letterSpacing: "0.07em" }}>
+            Contacts · {(selected.contacts||[]).length}
+          </div>
+          {(selected.contacts||[]).length === 0 ? (
+            <div style={{ padding: "24px 20px", textAlign: "center", color: V.muted, fontSize: "13px" }}>No contacts on record</div>
           ) : (
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr style={{ background: "#F8FAFC" }}>
-                  {["Account","Industry","Country","Contacts","Actions"].map(h => (
-                    <th key={h} style={{ padding: "10px 16px", textAlign: "left", fontSize: "10.5px", fontWeight: 700, color: V.muted, textTransform: "uppercase", letterSpacing: "0.06em", borderBottom: `1px solid ${V.border}`, whiteSpace: "nowrap" }}>{h}</th>
+                  {["Name","Designation","Email","Phone"].map(h => (
+                    <th key={h} style={{ padding: "9px 18px", textAlign: "left", fontSize: "10.5px", fontWeight: 700, color: V.muted, textTransform: "uppercase", letterSpacing: "0.06em", borderBottom: `1px solid ${V.border}` }}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {filtered.map(acc => (
-                  <tr key={acc.id} style={{ borderBottom: `1px solid ${V.border}`, cursor: "pointer" }}
+                {(selected.contacts||[]).map(c => (
+                  <tr key={c.id} style={{ borderBottom: `1px solid ${V.border}` }}>
+                    <td style={{ padding: "11px 18px" }}>
+                      <div style={{ fontWeight: 600, fontSize: "13px", color: V.ink, display: "flex", alignItems: "center", gap: "7px" }}>
+                        {c.name}
+                        {c.is_primary && <span style={{ fontSize: "9px", fontWeight: 700, background: "#E84B9C18", color: "#E84B9C", padding: "1px 7px", borderRadius: "99px", textTransform: "uppercase" }}>Primary</span>}
+                      </div>
+                    </td>
+                    <td style={{ padding: "11px 18px", fontSize: "12px", color: V.muted }}>{c.designation || "—"}</td>
+                    <td style={{ padding: "11px 18px", fontSize: "12px", color: V.muted }}>{c.email || "—"}</td>
+                    <td style={{ padding: "11px 18px", fontSize: "12px", color: V.muted }}>{c.phone || "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        {/* Quote history */}
+        <div style={{ background: "#fff", borderRadius: "12px", border: `1px solid ${V.border}`, overflow: "hidden" }}>
+          <div style={{ padding: "14px 20px", borderBottom: `1px solid ${V.border}`, fontSize: "11px", fontWeight: 800, color: V.ink, textTransform: "uppercase", letterSpacing: "0.07em" }}>Quote History</div>
+          {quotesLoading ? (
+            <div style={{ padding: "24px 20px", textAlign: "center", color: V.muted, fontSize: "13px" }}>Loading…</div>
+          ) : acctQuotes.length === 0 ? (
+            <div style={{ padding: "24px 20px", textAlign: "center", color: V.muted, fontSize: "13px" }}>No quotes linked to this account yet</div>
+          ) : (
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead>
+                <tr style={{ background: "#F8FAFC" }}>
+                  {["Quote ID","Name","Value (USD)","Date","Owner"].map(h => (
+                    <th key={h} style={{ padding: "9px 18px", textAlign: "left", fontSize: "10.5px", fontWeight: 700, color: V.muted, textTransform: "uppercase", letterSpacing: "0.06em", borderBottom: `1px solid ${V.border}` }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {acctQuotes.map(q => (
+                  <tr key={q.id} style={{ borderBottom: `1px solid ${V.border}`, cursor: "pointer" }}
                     onMouseEnter={e => e.currentTarget.style.background = "#F8FAFC"}
                     onMouseLeave={e => e.currentTarget.style.background = "#fff"}
-                    onClick={() => openAccount(acc)}>
-                    <td style={{ padding: "12px 16px" }}>
-                      <div style={{ fontWeight: 700, fontSize: "13px", color: V.ink }}>{acc.name}</div>
-                      {acc.website && <div style={{ fontSize: "11px", color: "#93C5FD", marginTop: "1px" }}>{acc.website}</div>}
-                    </td>
-                    <td style={{ padding: "12px 16px", fontSize: "12px", color: V.muted }}>{acc.industry || "—"}</td>
-                    <td style={{ padding: "12px 16px", fontSize: "12px", color: V.muted }}>{acc.country || "—"}</td>
-                    <td style={{ padding: "12px 16px", fontSize: "12px", color: V.muted }}>{(acc.contacts||[]).length}</td>
-                    <td style={{ padding: "12px 16px" }}>
-                      <button onClick={e => { e.stopPropagation(); openAccount(acc); }}
-                        style={{ fontSize: "12px", padding: "4px 10px", border: `1px solid ${V.border}`, borderRadius: "6px", background: "#F8FAFC", cursor: "pointer", color: V.ink, fontFamily: "inherit" }}>
-                        View →
-                      </button>
-                    </td>
+                    onClick={() => onLoadQuote(q)}>
+                    <td style={{ padding: "11px 18px", fontFamily: "monospace", fontSize: "11.5px", color: V.muted }}>{q.id}</td>
+                    <td style={{ padding: "11px 18px", fontSize: "13px", fontWeight: 600, color: V.ink }}>{q.quoteName || "—"}</td>
+                    <td style={{ padding: "11px 18px", fontSize: "13px", color: V.ink }}>${(q.subUSD||0).toLocaleString("en-US",{minimumFractionDigits:2})}</td>
+                    <td style={{ padding: "11px 18px", fontSize: "12px", color: V.muted }}>{q.savedAt ? new Date(q.savedAt).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}) : "—"}</td>
+                    <td style={{ padding: "11px 18px", fontSize: "12px", color: V.muted }}>{q.owner || q.ownerName || "—"}</td>
                   </tr>
                 ))}
               </tbody>
@@ -1469,535 +1385,707 @@ function AccountsView({ onBack, onLoadQuote, user }) {
           )}
         </div>
       </div>
+    );
+  }
+
+  return (
+    <div style={{ padding: "28px 32px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "22px", gap: "12px", flexWrap: "wrap" }}>
+        <div>
+          <div style={{ fontSize: "20px", fontWeight: 800, color: V.navy }}>Accounts</div>
+          <div style={{ fontSize: "12px", color: V.muted, marginTop: "2px" }}>Customer database</div>
+        </div>
+        <button onClick={() => setShowDrawer(true)}
+          style={{ background: "linear-gradient(135deg,#E84B9C,#F97316)", border: "none", color: "#fff", padding: "9px 18px", borderRadius: "8px", cursor: "pointer", fontSize: "13px", fontWeight: 700, fontFamily: "inherit", boxShadow: "0 4px 14px rgba(232,75,156,0.3)" }}>
+          + New Account
+        </button>
+      </div>
+
+      <div style={{ display: "flex", gap: "10px", marginBottom: "16px", alignItems: "center" }}>
+        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by name, industry, country…"
+          style={{ flex: 1, ...IS }} onFocus={e => e.target.style.borderColor = V.pink} onBlur={e => e.target.style.borderColor = V.border}/>
+        <span style={{ fontSize: "12px", color: V.muted, whiteSpace: "nowrap" }}>{filtered.length} account{filtered.length !== 1 ? "s" : ""}</span>
+      </div>
+
+      <div style={{ background: "#fff", borderRadius: "12px", border: `1px solid ${V.border}`, overflow: "hidden" }}>
+        {loading ? (
+          <div style={{ padding: "60px", textAlign: "center", color: V.muted }}>Loading…</div>
+        ) : filtered.length === 0 ? (
+          <div style={{ padding: "60px 24px", textAlign: "center" }}>
+            <div style={{ fontSize: "36px", marginBottom: "8px" }}>🏢</div>
+            <div style={{ fontSize: "14px", fontWeight: 700, color: V.ink }}>No accounts yet</div>
+            <div style={{ fontSize: "12px", color: V.muted, marginTop: "4px" }}>Create an account or select one while building a quote</div>
+          </div>
+        ) : (
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead>
+              <tr style={{ background: "#F8FAFC" }}>
+                {["Account","Industry","Country","Contacts",""].map((h,i) => (
+                  <th key={i} style={{ padding: "10px 18px", textAlign: "left", fontSize: "10.5px", fontWeight: 700, color: V.muted, textTransform: "uppercase", letterSpacing: "0.06em", borderBottom: `1px solid ${V.border}` }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map(acc => (
+                <tr key={acc.id} style={{ borderBottom: `1px solid ${V.border}`, cursor: "pointer" }}
+                  onMouseEnter={e => e.currentTarget.style.background = "#F8FAFC"}
+                  onMouseLeave={e => e.currentTarget.style.background = "#fff"}
+                  onClick={() => openAccount(acc)}>
+                  <td style={{ padding: "13px 18px" }}>
+                    <div style={{ fontWeight: 700, fontSize: "13px", color: V.ink }}>{acc.name}</div>
+                    {acc.website && <div style={{ fontSize: "11px", color: "#93C5FD", marginTop: "1px" }}>{acc.website}</div>}
+                  </td>
+                  <td style={{ padding: "13px 18px", fontSize: "12px", color: V.muted }}>{acc.industry || "—"}</td>
+                  <td style={{ padding: "13px 18px", fontSize: "12px", color: V.muted }}>{acc.country || "—"}</td>
+                  <td style={{ padding: "13px 18px", fontSize: "12px", color: V.muted }}>{(acc.contacts||[]).length}</td>
+                  <td style={{ padding: "13px 18px", textAlign: "right" }}>
+                    <span style={{ fontSize: "12px", color: V.pink, fontWeight: 600 }}>View →</span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
       {showDrawer && (
-        <AccountDrawer
-          initialName="" user={user}
+        <AccountDrawer initialName="" user={user}
           onSave={() => { setShowDrawer(false); reload(); }}
-          onClose={() => setShowDrawer(false)}
-        />
+          onClose={() => setShowDrawer(false)}/>
       )}
     </div>
   );
 }
 
-// ─── QUOTE HISTORY VIEW ───────────────────────────────────────────────────────
-function QuoteHistory({onNewQuote, onLoadQuote, onSignOut, user}){
-  const [quotes,setQuotes]=useState([]);
-  const [loading,setLoading]=useState(true);
-  const [search,setSearch]=useState("");
-  const [sortBy,setSortBy]=useState("savedAt");
-  const [confirm,setConfirm]=useState(null);
+// ─── SIDEBAR NAV ─────────────────────────────────────────────────────────────
+const NAV_ITEMS = [
+  { id: "home",     label: "Home",       icon: "⌂" },
+  { id: "builder",  label: "New Quote",  icon: "✦" },
+  { id: "accounts", label: "Accounts",   icon: "◈" },
+  { id: "history",  label: "All Quotes", icon: "≡" },
+];
 
-  useEffect(()=>{
-    fetchAllQuotes().then(q=>{setQuotes(q);setLoading(false);});
-  },[]);
-
-  const filtered=quotes
-    .filter(q=>{
-      const s=search.toLowerCase();
-      return !s||q.customer?.company?.toLowerCase().includes(s)||q.customer?.name?.toLowerCase().includes(s)||q.id?.toLowerCase().includes(s)||q.quoteName?.toLowerCase().includes(s)||q.owner?.toLowerCase().includes(s);
-    })
-    .sort((a,b)=>{
-      if(sortBy==="savedAt") return new Date(b.savedAt)-new Date(a.savedAt);
-      if(sortBy==="total") return (b.grandLocal||0)-(a.grandLocal||0);
-      if(sortBy==="company") return (a.customer?.company||"").localeCompare(b.customer?.company||"");
-      return 0;
-    });
-
-  async function handleDelete(id){
-    await removeQuote(id);
-    setQuotes(q=>q.filter(x=>x.id!==id));
-    setConfirm(null);
-  }
-
-  const totalValue=quotes.reduce((s,q)=>s+(q.subUSD||0),0);
-  const fmt$=n=>`$${n.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}`;
-
-  return(
-    <div className="qb-shell">
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap');
-        * { box-sizing: border-box; }
-        .qb-shell { min-height:100vh; background:#F1F5F9; font-family:'DM Sans',system-ui,sans-serif; }
-        .qb-nav { background:linear-gradient(90deg,#0D1B3E,#162447); height:58px; display:flex; align-items:center; justify-content:space-between; padding:0 20px; position:sticky; top:0; z-index:100; box-shadow:0 2px 12px rgba(13,27,62,0.4); gap:10px; }
-        .qb-nav-left { display:flex; align-items:center; gap:12px; min-width:0; }
-        .qb-nav-right { display:flex; gap:8px; align-items:center; flex-shrink:0; }
-        .qh-table { width:100%; border-collapse:collapse; }
-        .qh-table th { padding:10px 14px; text-align:left; font-size:10.5px; font-weight:800; color:#64748B; text-transform:uppercase; letter-spacing:0.07em; border-bottom:2px solid #E2E8F0; cursor:pointer; white-space:nowrap; }
-        .qh-table th:hover { color:#0D1B3E; }
-        .qh-table td { padding:12px 14px; border-bottom:1px solid #F1F5F9; font-size:13px; color:#1E293B; vertical-align:middle; }
-        .qh-table tr:last-child td { border-bottom:none; }
-        .qh-table tr:hover td { background:#F8FAFC; }
-        .qh-badge { display:inline-block; padding:2px 8px; border-radius:5px; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; }
-        @media (max-width:700px) {
-          .qh-hide { display:none; }
-          .qh-table td, .qh-table th { padding:9px 8px; }
-        }
-      `}</style>
+function Sidebar({ view, setView, user, onSignOut }) {
+  return (
+    <aside className="qb-sidebar">
+      {/* Logo */}
+      <div className="qb-sidebar-logo" style={{ padding: "22px 20px 14px" }}>
+        <VirtuosLogo height={26}/>
+        <div style={{ color: "rgba(255,255,255,0.25)", fontSize: "9px", marginTop: "8px", textTransform: "uppercase", letterSpacing: "0.14em" }}>Quote Builder</div>
+      </div>
+      <div style={{ height: "1px", background: "rgba(255,255,255,0.07)", margin: "0 0" }}/>
 
       {/* Nav */}
-      <div className="qb-nav">
-        <div className="qb-nav-left">
-          <div style={{display:"inline-flex",alignItems:"center",flexShrink:0}}>
-            <VirtuosLogo height={26}/>
-          </div>
-          <div style={{width:"1px",height:"28px",background:"rgba(255,255,255,0.12)",flexShrink:0}}/>
-          <div style={{color:"#fff",fontWeight:700,fontSize:"14px"}}>Quote History</div>
+      <nav className="qb-sidebar-nav">
+        {NAV_ITEMS.map(item => {
+          const active = view === item.id;
+          return (
+            <button key={item.id} onClick={() => setView(item.id)} className="qb-nav-item" data-active={active ? "1" : "0"}
+              style={{
+                display: "flex", alignItems: "center", gap: "11px",
+                padding: "10px 14px", borderRadius: "9px", width: "100%",
+                background: active ? "rgba(232,75,156,0.14)" : "transparent",
+                border: active ? "1px solid rgba(232,75,156,0.28)" : "1px solid transparent",
+                color: active ? "#E84B9C" : "rgba(255,255,255,0.52)",
+                fontWeight: active ? 700 : 500, fontSize: "13.5px",
+                cursor: "pointer", textAlign: "left", fontFamily: "inherit", transition: "all 0.12s",
+              }}
+              onMouseEnter={e => { if (!active) { e.currentTarget.style.background = "rgba(255,255,255,0.06)"; e.currentTarget.style.color = "rgba(255,255,255,0.82)"; } }}
+              onMouseLeave={e => { if (!active) { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "rgba(255,255,255,0.52)"; } }}>
+              <span className="qb-sidebar-icon" style={{ fontSize: "17px", width: "20px", textAlign: "center", flexShrink: 0 }}>{item.icon}</span>
+              <span className="qb-sidebar-label">{item.label}</span>
+            </button>
+          );
+        })}
+      </nav>
+
+      {/* User / sign out */}
+      <div className="qb-sidebar-user" style={{ padding: "14px 16px", borderTop: "1px solid rgba(255,255,255,0.07)", marginTop: "auto" }}>
+        <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.32)", marginBottom: "9px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", padding: "0 2px" }}>
+          {user?.user_metadata?.full_name || user?.email}
         </div>
-        <div className="qb-nav-right">
-          <span style={{color:"rgba(255,255,255,0.5)",fontSize:"12px",display:"none"}} className="qb-nav-subtitle">{user?.email}</span>
-          <button onClick={onNewQuote}
-            style={{background:"linear-gradient(135deg,#E84B9C,#F97316)",color:"#fff",border:"none",padding:"8px 16px",borderRadius:"8px",cursor:"pointer",fontSize:"13px",fontWeight:700,fontFamily:"inherit",whiteSpace:"nowrap"}}>
-            + New Quote
-          </button>
-          <button onClick={onSignOut}
-            style={{background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.7)",padding:"6px 12px",borderRadius:"6px",cursor:"pointer",fontSize:"12px",fontWeight:600,fontFamily:"inherit",whiteSpace:"nowrap"}}>
-            Sign Out
-          </button>
+        <button onClick={onSignOut}
+          style={{ width: "100%", padding: "8px 12px", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.09)", borderRadius: "8px", color: "rgba(255,255,255,0.4)", cursor: "pointer", fontSize: "12px", fontFamily: "inherit", transition: "all 0.12s" }}
+          onMouseEnter={e => { e.currentTarget.style.background = "rgba(255,255,255,0.1)"; e.currentTarget.style.color = "rgba(255,255,255,0.7)"; }}
+          onMouseLeave={e => { e.currentTarget.style.background = "rgba(255,255,255,0.05)"; e.currentTarget.style.color = "rgba(255,255,255,0.4)"; }}>
+          Sign Out
+        </button>
+      </div>
+    </aside>
+  );
+}
+
+// ─── HOME VIEW ────────────────────────────────────────────────────────────────
+function HomeView({ user, onLoadQuote, onNewQuote }) {
+  const [quotes,  setQuotes]  = useState([]);
+  const [loading, setLoading] = useState(true);
+  const name = user?.user_metadata?.full_name || user?.email?.split("@")[0] || "there";
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+
+  useEffect(() => {
+    fetchAllQuotes().then(all => {
+      setQuotes(all.filter(q => q.ownerEmail === user.email));
+      setLoading(false);
+    });
+  }, [user.email]);
+
+  const fmt$ = n => `$${n.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+  const now = new Date();
+  const thisMonth  = quotes.filter(q => q.savedAt && new Date(q.savedAt).getMonth() === now.getMonth() && new Date(q.savedAt).getFullYear() === now.getFullYear());
+  const totalUSD   = quotes.reduce((s, q) => s + (q.subUSD||0), 0);
+  const recent     = quotes.slice(0, 8);
+
+  return (
+    <div style={{ padding: "32px 36px", maxWidth: "1000px" }}>
+      {/* Welcome */}
+      <div style={{ marginBottom: "28px" }}>
+        <div style={{ fontSize: "24px", fontWeight: 800, color: V.navy }}>{greeting}, {name} 👋</div>
+        <div style={{ fontSize: "13px", color: V.muted, marginTop: "4px" }}>
+          {now.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
         </div>
       </div>
 
-      <div style={{maxWidth:"1100px",margin:"0 auto",padding:"24px 20px"}}>
+      {/* Stat cards */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "14px", marginBottom: "24px" }}>
+        {[
+          { label: "My Quotes",       value: loading ? "—" : quotes.length,       color: V.navy,    sub: "all time" },
+          { label: "This Month",      value: loading ? "—" : thisMonth.length,    color: "#7C3AED", sub: `quote${thisMonth.length !== 1 ? "s" : ""} created` },
+          { label: "Pipeline (USD)",  value: loading ? "—" : fmt$(totalUSD),      color: "#E84B9C", sub: "net value" },
+        ].map(s => (
+          <div key={s.label} style={{ background: "#fff", borderRadius: "14px", padding: "18px 22px", border: `1px solid ${V.border}`, boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
+            <div style={{ fontSize: "10px", fontWeight: 800, color: V.muted, textTransform: "uppercase", letterSpacing: "0.09em", marginBottom: "8px" }}>{s.label}</div>
+            <div style={{ fontSize: "26px", fontWeight: 900, color: s.color }}>{s.value}</div>
+            <div style={{ fontSize: "11px", color: V.muted, marginTop: "3px" }}>{s.sub}</div>
+          </div>
+        ))}
+      </div>
 
-        {/* Stats bar */}
-        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:"12px",marginBottom:"20px"}}>
-          {[
-            ["Total Quotes",quotes.length,"#0D1B3E"],
-            ["Pipeline (USD)",fmt$(totalValue),"#E84B9C"],
-            ["This Month",quotes.filter(q=>q.savedAt&&new Date(q.savedAt).getMonth()===new Date().getMonth()).length,"#0EA5E9"],
-          ].map(([label,val,color])=>(
-            <div key={label} style={{background:"#fff",borderRadius:"12px",padding:"16px 20px",border:"1px solid #E2E8F0",boxShadow:"0 1px 3px rgba(0,0,0,0.04)"}}>
-              <div style={{fontSize:"10px",fontWeight:800,color:"#94A3B8",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:"6px"}}>{label}</div>
-              <div style={{fontSize:"22px",fontWeight:900,color}}>{val}</div>
-            </div>
-          ))}
+      {/* New quote CTA */}
+      <div style={{ background: "linear-gradient(135deg,#0D1B3E,#1A2C55)", borderRadius: "14px", padding: "20px 26px", marginBottom: "24px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "16px", flexWrap: "wrap" }}>
+        <div>
+          <div style={{ color: "#fff", fontWeight: 700, fontSize: "15px" }}>Ready to build a new quote?</div>
+          <div style={{ color: "rgba(255,255,255,0.4)", fontSize: "12px", marginTop: "3px" }}>Asana · Smartsheet · Professional Services</div>
         </div>
+        <button onClick={onNewQuote}
+          style={{ background: "linear-gradient(135deg,#E84B9C,#F97316)", color: "#fff", border: "none", padding: "10px 22px", borderRadius: "9px", cursor: "pointer", fontSize: "13px", fontWeight: 700, fontFamily: "inherit", whiteSpace: "nowrap", boxShadow: "0 4px 14px rgba(232,75,156,0.4)" }}>
+          + New Quote
+        </button>
+      </div>
 
-        {/* Controls */}
-        <div style={{display:"flex",gap:"10px",marginBottom:"14px",flexWrap:"wrap"}}>
-          <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search by company, contact, quote ID, owner…"
-            style={{flex:1,minWidth:"200px",border:"1.5px solid #E2E8F0",borderRadius:"8px",padding:"8px 12px",fontSize:"13px",outline:"none",fontFamily:"inherit"}}
-            onFocus={e=>e.target.style.borderColor="#E84B9C"} onBlur={e=>e.target.style.borderColor="#E2E8F0"}/>
-          <select value={sortBy} onChange={e=>setSortBy(e.target.value)}
-            style={{border:"1.5px solid #E2E8F0",borderRadius:"8px",padding:"8px 12px",fontSize:"13px",outline:"none",fontFamily:"inherit",background:"#fff",cursor:"pointer"}}>
-            <option value="savedAt">Sort: Latest first</option>
-            <option value="total">Sort: Highest value</option>
-            <option value="company">Sort: Company A–Z</option>
-          </select>
+      {/* Recent quotes */}
+      <div style={{ background: "#fff", borderRadius: "14px", border: `1px solid ${V.border}`, overflow: "hidden" }}>
+        <div style={{ padding: "16px 22px", borderBottom: `1px solid ${V.border}` }}>
+          <div style={{ fontSize: "13px", fontWeight: 800, color: V.navy }}>My Recent Quotes</div>
         </div>
-
-        {/* Table */}
-        <div style={{background:"#fff",borderRadius:"14px",border:"1px solid #E2E8F0",boxShadow:"0 1px 4px rgba(0,0,0,0.05)",overflow:"hidden"}}>
-          {loading?(
-            <div style={{padding:"60px",textAlign:"center",color:"#94A3B8",fontSize:"13px"}}>Loading quotes…</div>
-          ):filtered.length===0?(
-            <div style={{padding:"60px 24px",textAlign:"center"}}>
-              <div style={{fontSize:"36px",marginBottom:"10px"}}>{quotes.length===0?"📋":"🔍"}</div>
-              <div style={{fontSize:"15px",fontWeight:700,color:"#1E293B"}}>{quotes.length===0?"No quotes saved yet":"No quotes match your search"}</div>
-              <div style={{fontSize:"12px",color:"#94A3B8",marginTop:"4px"}}>{quotes.length===0?"Create a quote and preview it to save it here.":"Try a different search term."}</div>
-              {quotes.length===0&&<button onClick={onNewQuote} style={{marginTop:"16px",background:"linear-gradient(135deg,#E84B9C,#F97316)",color:"#fff",border:"none",padding:"10px 22px",borderRadius:"8px",cursor:"pointer",fontSize:"13px",fontWeight:700,fontFamily:"inherit"}}>Create your first quote</button>}
-            </div>
-          ):(
-            <div style={{overflowX:"auto"}}>
-              <table className="qh-table">
-                <thead>
-                  <tr>
-                    <th onClick={()=>setSortBy("company")}>Company / Contact</th>
-                    <th>Quote ID</th>
-                    <th className="qh-hide">Products</th>
-                    <th className="qh-hide">Created By</th>
-                    <th className="qh-hide">Payment</th>
-                    <th onClick={()=>setSortBy("total")}>Total (USD)</th>
-                    <th onClick={()=>setSortBy("savedAt")}>Saved</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.map(q=>{
-                    const cats=[...new Set((q.lines||[]).map(l=>l.productCategory))];
-                    const catColors={asana:"#FC636B",smartsheet:"#0073EA",professional_services:"#7C3AED"};
-                    const catLabels={asana:"Asana",smartsheet:"Smartsheet",professional_services:"Prof. Services"};
-                    return(
-                      <tr key={q.id}>
-                        <td>
-                          <div style={{fontWeight:700,color:"#1E293B"}}>{q.customer?.company||"—"}</div>
-                          <div style={{fontSize:"11.5px",color:"#94A3B8",marginTop:"1px"}}>{q.customer?.name||""}{q.customer?.email?` · ${q.customer.email}`:""}</div>
-                        </td>
-                        <td>
-                          <div style={{fontFamily:"monospace",fontSize:"12px",fontWeight:700,color:"#0D1B3E",background:"#F1F5F9",padding:"2px 7px",borderRadius:"5px",display:"inline-block"}}>{q.id}</div>
-                          {q.quoteName&&<div style={{fontSize:"11px",color:"#64748B",marginTop:"3px"}}>{q.quoteName}</div>}
-                        </td>
-                        <td className="qh-hide">
-                          <div style={{display:"flex",flexWrap:"wrap",gap:"4px"}}>
-                            {cats.map(c=>(
-                              <span key={c} className="qh-badge" style={{background:catColors[c]+"18",color:catColors[c],border:`1px solid ${catColors[c]}33`}}>{catLabels[c]}</span>
-                            ))}
-                          </div>
-                        </td>
-                        <td className="qh-hide">
-                          <div style={{fontSize:"12.5px",fontWeight:600,color:"#1E293B"}}>{q.ownerName||q.owner||"—"}</div>
-                          <div style={{fontSize:"11px",color:"#94A3B8"}}>{q.ownerEmail||""}</div>
-                        </td>
-                        <td className="qh-hide" style={{fontSize:"12px",color:"#64748B"}}>{q.paymentTerms||"—"}</td>
-                        <td>
-                          <div style={{fontWeight:800,color:"#1E293B"}}>{fmt$(q.subUSD||0)}</div>
-                          {q.currency?.code&&q.currency.code!=="USD"&&<div style={{fontSize:"11px",color:"#94A3B8"}}>{q.currency.symbol}{((q.subUSD||0)*q.currency.rate).toLocaleString("en-US",{minimumFractionDigits:0,maximumFractionDigits:0})} {q.currency.code}</div>}
-                        </td>
-                        <td style={{color:"#94A3B8",fontSize:"12px",whiteSpace:"nowrap"}}>{q.savedAt?new Date(q.savedAt).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}):q.createdOn||"—"}</td>
-                        <td>
-                          <div style={{display:"flex",gap:"6px",justifyContent:"flex-end"}}>
-                            <button onClick={()=>onLoadQuote(q)}
-                              style={{padding:"5px 12px",background:"#0D1B3E",color:"#fff",border:"none",borderRadius:"6px",cursor:"pointer",fontSize:"12px",fontWeight:600,fontFamily:"inherit",whiteSpace:"nowrap"}}>
-                              Load
-                            </button>
-                            {confirm===q.id?(
-                              <>
-                                <button onClick={()=>handleDelete(q.id)} style={{padding:"5px 10px",background:"#EF4444",color:"#fff",border:"none",borderRadius:"6px",cursor:"pointer",fontSize:"12px",fontWeight:600,fontFamily:"inherit"}}>Confirm</button>
-                                <button onClick={()=>setConfirm(null)} style={{padding:"5px 10px",background:"#F1F5F9",color:"#64748B",border:"1px solid #E2E8F0",borderRadius:"6px",cursor:"pointer",fontSize:"12px",fontFamily:"inherit"}}>Cancel</button>
-                              </>
-                            ):(
-                              <button onClick={()=>setConfirm(q.id)} style={{padding:"5px 10px",background:"#FEF2F2",color:"#EF4444",border:"1px solid #FECACA",borderRadius:"6px",cursor:"pointer",fontSize:"12px",fontFamily:"inherit"}}>Delete</button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-        <div style={{marginTop:"10px",fontSize:"11px",color:"#94A3B8",textAlign:"right"}}>{filtered.length} of {quotes.length} quotes · stored in browser localStorage</div>
+        {loading ? (
+          <div style={{ padding: "40px", textAlign: "center", color: V.muted, fontSize: "13px" }}>Loading…</div>
+        ) : recent.length === 0 ? (
+          <div style={{ padding: "48px", textAlign: "center" }}>
+            <div style={{ fontSize: "32px", marginBottom: "8px" }}>📋</div>
+            <div style={{ fontSize: "14px", fontWeight: 700, color: V.ink }}>No quotes yet</div>
+            <div style={{ fontSize: "12px", color: V.muted, marginTop: "4px" }}>Your quotes will appear here after you create and save them</div>
+          </div>
+        ) : (
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead>
+              <tr style={{ background: "#F8FAFC" }}>
+                {["Company", "Quote ID / Name", "Value (USD)", "Date"].map(h => (
+                  <th key={h} style={{ padding: "10px 20px", textAlign: "left", fontSize: "10.5px", fontWeight: 700, color: V.muted, textTransform: "uppercase", letterSpacing: "0.06em", borderBottom: `1px solid ${V.border}` }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {recent.map(q => (
+                <tr key={q.id} onClick={() => onLoadQuote(q)} style={{ cursor: "pointer", borderBottom: `1px solid #F1F5F9` }}
+                  onMouseEnter={e => e.currentTarget.style.background = "#F8FAFC"}
+                  onMouseLeave={e => e.currentTarget.style.background = "#fff"}>
+                  <td style={{ padding: "12px 20px" }}>
+                    <div style={{ fontWeight: 700, fontSize: "13px", color: V.ink }}>{q.customer?.company || "—"}</div>
+                    <div style={{ fontSize: "11px", color: V.muted, marginTop: "1px" }}>{q.customer?.name || ""}</div>
+                  </td>
+                  <td style={{ padding: "12px 20px" }}>
+                    <div style={{ fontFamily: "monospace", fontSize: "11.5px", color: V.muted }}>{q.id}</div>
+                    {q.quoteName && <div style={{ fontSize: "11px", color: V.ink, marginTop: "2px" }}>{q.quoteName}</div>}
+                  </td>
+                  <td style={{ padding: "12px 20px", fontWeight: 700, fontSize: "13px", color: V.ink }}>{fmt$(q.subUSD || 0)}</td>
+                  <td style={{ padding: "12px 20px", fontSize: "12px", color: V.muted }}>{q.savedAt ? new Date(q.savedAt).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}) : "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
     </div>
   );
 }
 
+// ─── QUOTE HISTORY VIEW ───────────────────────────────────────────────────────
+function QuoteHistory({ onNewQuote, onLoadQuote, user }) {
+  const [quotes,   setQuotes]  = useState([]);
+  const [loading,  setLoading] = useState(true);
+  const [search,   setSearch]  = useState("");
+  const [sortBy,   setSortBy]  = useState("savedAt");
+  const [confirm,  setConfirm] = useState(null);
+
+  useEffect(() => { fetchAllQuotes().then(q => { setQuotes(q); setLoading(false); }); }, []);
+
+  const filtered = quotes
+    .filter(q => {
+      const s = search.toLowerCase();
+      return !s || q.customer?.company?.toLowerCase().includes(s) || q.customer?.name?.toLowerCase().includes(s) || q.id?.toLowerCase().includes(s) || q.quoteName?.toLowerCase().includes(s) || q.owner?.toLowerCase().includes(s);
+    })
+    .sort((a, b) => {
+      if (sortBy === "savedAt") return new Date(b.savedAt) - new Date(a.savedAt);
+      if (sortBy === "total")   return (b.subUSD||0) - (a.subUSD||0);
+      if (sortBy === "company") return (a.customer?.company||"").localeCompare(b.customer?.company||"");
+      return 0;
+    });
+
+  async function handleDelete(id) { await removeQuote(id); setQuotes(q => q.filter(x => x.id !== id)); setConfirm(null); }
+
+  const fmt$ = n => `$${n.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}`;
+  const totalValue = quotes.reduce((s, q) => s + (q.subUSD||0), 0);
+
+  return (
+    <div style={{ padding: "28px 32px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "22px", gap: "12px", flexWrap: "wrap" }}>
+        <div>
+          <div style={{ fontSize: "20px", fontWeight: 800, color: V.navy }}>All Quotes</div>
+          <div style={{ fontSize: "12px", color: V.muted, marginTop: "2px" }}>Every quote across your team</div>
+        </div>
+        <button onClick={onNewQuote}
+          style={{ background: "linear-gradient(135deg,#E84B9C,#F97316)", color: "#fff", border: "none", padding: "9px 18px", borderRadius: "8px", cursor: "pointer", fontSize: "13px", fontWeight: 700, fontFamily: "inherit", boxShadow: "0 4px 14px rgba(232,75,156,0.3)" }}>
+          + New Quote
+        </button>
+      </div>
+
+      {/* Stats */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: "12px", marginBottom: "20px" }}>
+        {[
+          ["Total Quotes", quotes.length, V.navy],
+          ["Pipeline (USD)", fmt$(totalValue), "#E84B9C"],
+          ["This Month", quotes.filter(q => q.savedAt && new Date(q.savedAt).getMonth() === new Date().getMonth()).length, "#0EA5E9"],
+        ].map(([label, val, color]) => (
+          <div key={label} style={{ background: "#fff", borderRadius: "12px", padding: "16px 20px", border: `1px solid ${V.border}`, boxShadow: "0 1px 3px rgba(0,0,0,0.04)" }}>
+            <div style={{ fontSize: "10px", fontWeight: 800, color: V.muted, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "6px" }}>{label}</div>
+            <div style={{ fontSize: "22px", fontWeight: 900, color }}>{val}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Controls */}
+      <div style={{ display: "flex", gap: "10px", marginBottom: "14px", flexWrap: "wrap" }}>
+        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by company, contact, quote ID, owner…"
+          style={{ flex: 1, minWidth: "200px", ...IS }}
+          onFocus={e => e.target.style.borderColor = V.pink} onBlur={e => e.target.style.borderColor = V.border}/>
+        <select value={sortBy} onChange={e => setSortBy(e.target.value)}
+          style={{ ...IS, width: "auto", background: "#fff", cursor: "pointer" }}>
+          <option value="savedAt">Latest first</option>
+          <option value="total">Highest value</option>
+          <option value="company">Company A–Z</option>
+        </select>
+      </div>
+
+      {/* Table */}
+      <div style={{ background: "#fff", borderRadius: "14px", border: `1px solid ${V.border}`, overflow: "hidden" }}>
+        {loading ? (
+          <div style={{ padding: "60px", textAlign: "center", color: V.muted, fontSize: "13px" }}>Loading quotes…</div>
+        ) : filtered.length === 0 ? (
+          <div style={{ padding: "60px 24px", textAlign: "center" }}>
+            <div style={{ fontSize: "36px", marginBottom: "10px" }}>{quotes.length === 0 ? "📋" : "🔍"}</div>
+            <div style={{ fontSize: "15px", fontWeight: 700, color: V.ink }}>{quotes.length === 0 ? "No quotes saved yet" : "No quotes match your search"}</div>
+            {quotes.length === 0 && <button onClick={onNewQuote} style={{ marginTop: "16px", background: "linear-gradient(135deg,#E84B9C,#F97316)", color: "#fff", border: "none", padding: "10px 22px", borderRadius: "8px", cursor: "pointer", fontSize: "13px", fontWeight: 700, fontFamily: "inherit" }}>Create your first quote</button>}
+          </div>
+        ) : (
+          <div style={{ overflowX: "auto" }}>
+            <table className="qh-table">
+              <thead>
+                <tr>
+                  <th onClick={() => setSortBy("company")}>Company / Contact</th>
+                  <th>Quote ID</th>
+                  <th className="qh-hide">Products</th>
+                  <th className="qh-hide">Owner</th>
+                  <th className="qh-hide">Payment</th>
+                  <th onClick={() => setSortBy("total")}>Total (USD)</th>
+                  <th onClick={() => setSortBy("savedAt")}>Saved</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map(q => {
+                  const cats = [...new Set((q.lines||[]).map(l => l.productCategory))];
+                  const catColors = { asana: "#FC636B", smartsheet: "#0073EA", professional_services: "#7C3AED" };
+                  const catLabels = { asana: "Asana", smartsheet: "Smartsheet", professional_services: "Prof. Svcs" };
+                  return (
+                    <tr key={q.id}>
+                      <td>
+                        <div style={{ fontWeight: 700, color: V.ink }}>{q.customer?.company || "—"}</div>
+                        <div style={{ fontSize: "11.5px", color: V.muted, marginTop: "1px" }}>{q.customer?.name || ""}{q.customer?.email ? ` · ${q.customer.email}` : ""}</div>
+                      </td>
+                      <td>
+                        <div style={{ fontFamily: "monospace", fontSize: "12px", fontWeight: 700, color: V.navy, background: "#F1F5F9", padding: "2px 7px", borderRadius: "5px", display: "inline-block" }}>{q.id}</div>
+                        {q.quoteName && <div style={{ fontSize: "11px", color: V.muted, marginTop: "3px" }}>{q.quoteName}</div>}
+                      </td>
+                      <td className="qh-hide">
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: "4px" }}>
+                          {cats.map(c => <span key={c} className="qh-badge" style={{ background: catColors[c]+"18", color: catColors[c], border: `1px solid ${catColors[c]}33` }}>{catLabels[c]}</span>)}
+                        </div>
+                      </td>
+                      <td className="qh-hide">
+                        <div style={{ fontSize: "12.5px", fontWeight: 600, color: V.ink }}>{q.ownerName || q.owner || "—"}</div>
+                        <div style={{ fontSize: "11px", color: V.muted }}>{q.ownerEmail || ""}</div>
+                      </td>
+                      <td className="qh-hide" style={{ fontSize: "12px", color: V.muted }}>{q.paymentTerms || "—"}</td>
+                      <td>
+                        <div style={{ fontWeight: 800, color: V.ink }}>{fmt$(q.subUSD || 0)}</div>
+                        {q.currency?.code && q.currency.code !== "USD" && <div style={{ fontSize: "11px", color: V.muted }}>{q.currency.symbol}{((q.subUSD||0)*q.currency.rate).toLocaleString("en-US",{maximumFractionDigits:0})} {q.currency.code}</div>}
+                      </td>
+                      <td style={{ color: V.muted, fontSize: "12px", whiteSpace: "nowrap" }}>{q.savedAt ? new Date(q.savedAt).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}) : q.createdOn || "—"}</td>
+                      <td>
+                        <div style={{ display: "flex", gap: "6px", justifyContent: "flex-end" }}>
+                          <button onClick={() => onLoadQuote(q)} style={{ padding: "5px 12px", background: V.navy, color: "#fff", border: "none", borderRadius: "6px", cursor: "pointer", fontSize: "12px", fontWeight: 600, fontFamily: "inherit" }}>Load</button>
+                          {confirm === q.id ? (
+                            <>
+                              <button onClick={() => handleDelete(q.id)} style={{ padding: "5px 10px", background: "#EF4444", color: "#fff", border: "none", borderRadius: "6px", cursor: "pointer", fontSize: "12px", fontFamily: "inherit" }}>Confirm</button>
+                              <button onClick={() => setConfirm(null)} style={{ padding: "5px 10px", background: "#F1F5F9", color: V.muted, border: `1px solid ${V.border}`, borderRadius: "6px", cursor: "pointer", fontSize: "12px", fontFamily: "inherit" }}>Cancel</button>
+                            </>
+                          ) : (
+                            <button onClick={() => setConfirm(q.id)} style={{ padding: "5px 10px", background: "#FEF2F2", color: "#EF4444", border: "1px solid #FECACA", borderRadius: "6px", cursor: "pointer", fontSize: "12px", fontFamily: "inherit" }}>Delete</button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+      <div style={{ marginTop: "10px", fontSize: "11px", color: V.muted, textAlign: "right" }}>{filtered.length} of {quotes.length} quotes</div>
+    </div>
+  );
+}
+
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
-export default function QuoteBuilder({ user, onSignOut }){
-  const today=new Date().toISOString().split("T")[0];
-  const [view,setView]=useState("builder"); // "builder" | "history" | "accounts"
-  const [customer,setCustomer]=useState({name:"",company:"",email:"",phone:""});
-  const [accountId,setAccountId]=useState(null);
-  const [paymentTerms,setPaymentTerms]=useState("100% Advance");
-  const [qd,setQd]=useState({quoteId:generateQuoteId(),quoteName:"",createdOn:new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}),owner:"",notes:"",validUntil:""});
-  const [lines,setLines]=useState([]);
-  const [currency,setCurrency]=useState(CURRENCIES[0]);
-  const [billingCycle,setBillingCycle]=useState("annual");
-  const [monthCount,setMonthCount]=useState(12);
-  const [startDate,setStartDate]=useState(today);
-  const [endDate,setEndDate]=useState(autoEndDate(today,"annual",12));
-  const [taxConfig,setTaxConfig]=useState(TAX_RATES[0]);
-  const [showPreview,setShowPreview]=useState(false);
+export default function QuoteBuilder({ user, onSignOut }) {
+  const today = new Date().toISOString().split("T")[0];
+  const [view,         setView]         = useState("home");
+  const [customer,     setCustomer]     = useState({ name: "", company: "", email: "", phone: "" });
+  const [accountId,    setAccountId]    = useState(null);
+  const [paymentTerms, setPaymentTerms] = useState("100% Advance");
+  const [qd,           setQd]           = useState({ quoteId: generateQuoteId(), quoteName: "", createdOn: new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}), owner: "", notes: "", validUntil: "" });
+  const [lines,        setLines]        = useState([]);
+  const [currency,     setCurrency]     = useState(CURRENCIES[0]);
+  const [billingCycle, setBillingCycle] = useState("annual");
+  const [monthCount,   setMonthCount]   = useState(12);
+  const [startDate,    setStartDate]    = useState(today);
+  const [endDate,      setEndDate]      = useState(autoEndDate(today, "annual", 12));
+  const [taxConfig,    setTaxConfig]    = useState(TAX_RATES[0]);
+  const [showPreview,  setShowPreview]  = useState(false);
 
-  const handleCycle=c=>{setBillingCycle(c);setEndDate(autoEndDate(startDate,c,monthCount));};
-  const handleStart=d=>{setStartDate(d);setEndDate(autoEndDate(d,billingCycle,monthCount));};
-  const handleMonths=n=>{const m=Math.max(1,parseInt(n)||1);setMonthCount(m);setEndDate(autoEndDate(startDate,"monthly",m));};
+  const handleCycle  = c => { setBillingCycle(c); setEndDate(autoEndDate(startDate, c, monthCount)); };
+  const handleStart  = d => { setStartDate(d); setEndDate(autoEndDate(d, billingCycle, monthCount)); };
+  const handleMonths = n => { const m = Math.max(1, parseInt(n)||1); setMonthCount(m); setEndDate(autoEndDate(startDate, "monthly", m)); };
 
-  function saveCurrentQuote(){
-    const cl=computeLines(lines,startDate,endDate,billingCycle);
-    const subUSD=cl.reduce((s,l)=>s+l.net,0);
-    const snapshot={
-      id:qd.quoteId, quoteName:qd.quoteName, createdOn:qd.createdOn, validUntil:qd.validUntil,
-      owner:qd.owner||user?.user_metadata?.full_name||user?.email, notes:qd.notes,
+  function resetQuote() {
+    setCustomer({ name: "", company: "", email: "", phone: "" });
+    setAccountId(null); setLines([]); setPaymentTerms("100% Advance");
+    setQd({ quoteId: generateQuoteId(), quoteName: "", createdOn: new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}), owner: "", notes: "", validUntil: "" });
+    setCurrency(CURRENCIES[0]); setBillingCycle("annual"); setMonthCount(12);
+    setStartDate(today); setEndDate(autoEndDate(today,"annual",12)); setTaxConfig(TAX_RATES[0]);
+  }
+
+  function saveCurrentQuote() {
+    const cl = computeLines(lines, startDate, endDate, billingCycle);
+    const subUSD = cl.reduce((s, l) => s + l.net, 0);
+    const snapshot = {
+      id: qd.quoteId, quoteName: qd.quoteName, createdOn: qd.createdOn, validUntil: qd.validUntil,
+      owner: qd.owner || user?.user_metadata?.full_name || user?.email, notes: qd.notes,
       customer, currency, billingCycle, monthCount, startDate, endDate, taxConfig, paymentTerms,
-      lines, subUSD, grandLocal:subUSD*currency.rate, accountId,
+      lines, subUSD, grandLocal: subUSD * currency.rate, accountId,
     };
     upsertQuote(snapshot, user, accountId);
   }
 
-  function loadQuote(q){
-    setCustomer(q.customer||{name:"",company:"",email:"",phone:""});
-    setAccountId(q.accountId||null);
-    setPaymentTerms(q.paymentTerms||"100% Advance");
-    setQd({quoteId:q.id,quoteName:q.quoteName||"",createdOn:q.createdOn||"",owner:q.owner||"",notes:q.notes||"",validUntil:q.validUntil||""});
-    setLines(q.lines||[]);
-    setCurrency(q.currency||CURRENCIES[0]);
-    setBillingCycle(q.billingCycle||"annual");
-    setMonthCount(q.monthCount||12);
-    setStartDate(q.startDate||today);
-    setEndDate(q.endDate||autoEndDate(today,"annual",12));
-    setTaxConfig(q.taxConfig||TAX_RATES[0]);
+  function loadQuote(q) {
+    setCustomer(q.customer || { name: "", company: "", email: "", phone: "" });
+    setAccountId(q.accountId || null);
+    setPaymentTerms(q.paymentTerms || "100% Advance");
+    setQd({ quoteId: q.id, quoteName: q.quoteName||"", createdOn: q.createdOn||"", owner: q.owner||"", notes: q.notes||"", validUntil: q.validUntil||"" });
+    setLines(q.lines || []);
+    setCurrency(q.currency || CURRENCIES[0]);
+    setBillingCycle(q.billingCycle || "annual");
+    setMonthCount(q.monthCount || 12);
+    setStartDate(q.startDate || today);
+    setEndDate(q.endDate || autoEndDate(today, "annual", 12));
+    setTaxConfig(q.taxConfig || TAX_RATES[0]);
     setView("builder");
   }
 
-  const addLine=cat=>{
-    const p=PRODUCTS[cat];if(!p)return;
-    setLines(prev=>[...prev,{productCategory:cat,itemId:p.tiers[0].id,qty:1,discount:0,discountType:"percent"}]);
+  const addLine = cat => {
+    const p = PRODUCTS[cat]; if (!p) return;
+    setLines(prev => [...prev, { productCategory: cat, itemId: p.tiers[0].id, qty: 1, discount: 0, discountType: "percent" }]);
   };
 
-  const totals=useMemo(()=>{
-    const cl=computeLines(lines,startDate,endDate,billingCycle);
-    const annualList=cl.reduce((s,l)=>s+l.annual,0);
-    const discTotal=cl.reduce((s,l)=>s+l.disc,0);
-    const subUSD=cl.reduce((s,l)=>s+l.net,0);
-    const subLocal=subUSD*currency.rate;
-    const taxLocal=subLocal*taxConfig.rate;
-    return{annualList,discTotal,subUSD,subLocal,taxLocal,grand:subLocal+taxLocal};
-  },[lines,startDate,endDate,billingCycle,currency,taxConfig]);
+  const totals = useMemo(() => {
+    const cl = computeLines(lines, startDate, endDate, billingCycle);
+    const annualList = cl.reduce((s,l) => s+l.annual, 0);
+    const discTotal  = cl.reduce((s,l) => s+l.disc, 0);
+    const subUSD     = cl.reduce((s,l) => s+l.net, 0);
+    const subLocal   = subUSD * currency.rate;
+    const taxLocal   = subLocal * taxConfig.rate;
+    return { annualList, discTotal, subUSD, subLocal, taxLocal, grand: subLocal + taxLocal };
+  }, [lines, startDate, endDate, billingCycle, currency, taxConfig]);
 
-  const days=daysBetween(startDate,endDate);
-  const prPct=billingCycle!=="annual"?`Pro-rata: ${(proRataFactor(startDate,endDate,billingCycle)*100).toFixed(1)}%`:null;
+  const days  = daysBetween(startDate, endDate);
+  const prPct = billingCycle !== "annual" ? `Pro-rata: ${(proRataFactor(startDate,endDate,billingCycle)*100).toFixed(1)}%` : null;
 
-  if(view==="history")  return <QuoteHistory onNewQuote={()=>{setQd(q=>({...q,quoteId:generateQuoteId()}));setLines([]);setView("builder");}} onLoadQuote={loadQuote} onSignOut={onSignOut} user={user}/>;
-  if(view==="accounts") return <AccountsView onBack={()=>setView("builder")} onLoadQuote={q=>{loadQuote(q);setView("builder");}} user={user}/>;
+  const handleNav = v => {
+    if (v === "builder") { resetQuote(); }
+    setView(v);
+  };
 
-  return(
-    <div className="qb-shell">
+  return (
+    <div className="qb-root">
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap');
         * { box-sizing: border-box; }
-
-        /* ── Responsive layout ────────────────────────────────── */
-        .qb-shell   { min-height:100vh; background:#F1F5F9; font-family:'DM Sans',system-ui,sans-serif; }
-
-        /* Nav */
-        .qb-nav     { background:linear-gradient(90deg,#0D1B3E,#162447); height:58px; display:flex; align-items:center; justify-content:space-between; padding:0 20px; position:sticky; top:0; z-index:100; box-shadow:0 2px 12px rgba(13,27,62,0.4); gap:10px; }
-        .qb-nav-left  { display:flex; align-items:center; gap:12px; min-width:0; }
-        .qb-nav-title { line-height:1.2; min-width:0; }
-        .qb-nav-right { display:flex; gap:8px; align-items:center; flex-shrink:0; }
-        .qb-nav-subtitle { display:block; }
-
-        /* Body grid */
-        .qb-body    { max-width:1160px; margin:0 auto; padding:20px; }
-        .qb-grid    { display:grid; grid-template-columns:310px 1fr; gap:18px; align-items:start; }
-
-        /* Product line row */
-        .pl-grid    { display:grid; grid-template-columns:2fr 1fr 1fr 1fr 1fr; gap:8px; align-items:end; }
-
-        /* Add products buttons */
-        .add-grid   { display:grid; grid-template-columns:1fr 1fr 1fr; gap:9px; }
-
-        /* Quote preview modal */
-        .qp-header-grid  { display:grid; grid-template-columns:1fr 1fr; gap:0; padding:18px 36px 24px; }
+        .qb-root         { display:flex; min-height:100vh; font-family:'DM Sans',system-ui,sans-serif; background:#F1F5F9; }
+        .qb-sidebar      { width:224px; min-width:224px; background:linear-gradient(180deg,#0D1B3E 0%,#09111f 100%); display:flex; flex-direction:column; position:sticky; top:0; height:100vh; flex-shrink:0; overflow:hidden; transition:width 0.2s; }
+        .qb-sidebar-nav  { flex:1; padding:12px; display:flex; flex-direction:column; gap:3px; overflow:hidden; }
+        .qb-content      { flex:1; overflow:auto; min-height:100vh; }
+        .qb-builder-bar  { background:#fff; border-bottom:1px solid #E2E8F0; padding:12px 22px; display:flex; align-items:center; justify-content:space-between; gap:12px; position:sticky; top:0; z-index:50; flex-wrap:wrap; }
+        .qb-body         { max-width:1160px; margin:0 auto; padding:20px; }
+        .qb-grid         { display:grid; grid-template-columns:300px 1fr; gap:18px; align-items:start; }
+        .pl-grid         { display:grid; grid-template-columns:2fr 1fr 1fr 1fr 1fr; gap:8px; align-items:end; }
+        .add-grid        { display:grid; grid-template-columns:1fr 1fr 1fr; gap:9px; }
+        .qh-table        { width:100%; border-collapse:collapse; }
+        .qh-table th     { padding:10px 16px; text-align:left; font-size:10.5px; font-weight:800; color:#64748B; text-transform:uppercase; letter-spacing:0.07em; border-bottom:2px solid #E2E8F0; cursor:pointer; white-space:nowrap; }
+        .qh-table th:hover { color:#0D1B3E; }
+        .qh-table td     { padding:12px 16px; border-bottom:1px solid #F1F5F9; font-size:13px; color:#1E293B; vertical-align:middle; }
+        .qh-table tr:last-child td { border-bottom:none; }
+        .qh-table tr:hover td { background:#F8FAFC; }
+        .qh-badge        { display:inline-block; padding:2px 8px; border-radius:5px; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; }
+        .qp-header-grid  { display:grid; grid-template-columns:1fr 1fr; padding:18px 36px 24px; }
         .qp-meta-grid    { display:grid; grid-template-columns:1fr 1fr; gap:10px 20px; align-content:start; }
         .qp-body         { padding:28px 36px; }
         .qp-modal-inner  { background:#fff; width:100%; max-width:860px; border-radius:20px; overflow:hidden; box-shadow:0 32px 80px rgba(0,0,0,0.35); margin-bottom:20px; }
         .qp-action-bar   { padding:14px 36px; display:flex; gap:10px; justify-content:flex-end; border-top:1px solid #E2E8F0; background:#F8FAFC; }
-
-        /* ── Tablet (≤ 900px) ─────────────────────────────────── */
+        @media (max-width:1100px) {
+          .qb-sidebar-label { display:none; }
+          .qb-sidebar { width:64px; min-width:64px; }
+          .qb-sidebar-logo { display:none; }
+          .qb-sidebar-user { padding:8px; }
+          .qb-sidebar-user div { display:none; }
+          .qb-sidebar-user button { padding:8px; }
+          .qb-sidebar-nav { padding:8px 6px; }
+        }
         @media (max-width:900px) {
-          .qb-grid   { grid-template-columns:1fr; }
-          .qb-nav    { padding:0 14px; height:auto; min-height:58px; flex-wrap:wrap; padding-top:8px; padding-bottom:8px; }
-          .qb-nav-subtitle { display:none; }
-          .add-grid  { grid-template-columns:1fr 1fr 1fr; }
-          .pl-grid   { grid-template-columns:1fr 1fr 1fr; }
-          .qp-body   { padding:20px 20px; }
+          .qb-grid { grid-template-columns:1fr; }
+          .pl-grid { grid-template-columns:1fr 1fr 1fr; }
+          .add-grid { grid-template-columns:1fr 1fr 1fr; }
+          .qp-body { padding:20px; }
           .qp-header-grid { padding:14px 20px 18px; }
-          .qp-action-bar  { padding:12px 20px; }
+          .qp-action-bar { padding:12px 20px; }
           .qp-modal-inner { border-radius:14px; }
         }
-
-        /* ── Mobile (≤ 600px) ─────────────────────────────────── */
         @media (max-width:600px) {
-          .qb-nav    { height:auto; min-height:52px; padding:8px 12px; }
-          .qb-nav-left { gap:8px; }
-          .qb-body   { padding:12px; }
-          .add-grid  { grid-template-columns:1fr 1fr; }
-          .pl-grid   { grid-template-columns:1fr 1fr; }
-          .qp-header-grid  { grid-template-columns:1fr; gap:12px; padding:14px 16px 14px; }
-          .qp-meta-grid    { grid-template-columns:1fr 1fr; }
-          .qp-body         { padding:14px 16px; }
-          .qp-action-bar   { padding:10px 16px; flex-direction:column-reverse; }
-          .qp-modal-inner  { border-radius:10px; }
-          .qp-table-hide   { display:none; }
+          .qb-sidebar { width:100%; min-width:100%; height:auto; position:fixed; bottom:0; top:auto; z-index:200; flex-direction:row; border-top:1px solid rgba(255,255,255,0.08); }
+          .qb-sidebar-logo, .qb-sidebar-user { display:none; }
+          .qb-sidebar-nav { flex-direction:row; padding:4px 6px; gap:2px; }
+          .qb-sidebar-label { display:none; }
+          .qb-content { padding-bottom:68px; }
+          .qb-body { padding:12px; }
+          .pl-grid { grid-template-columns:1fr 1fr; }
+          .add-grid { grid-template-columns:1fr 1fr; }
+          .qh-hide { display:none; }
+          .qp-header-grid { grid-template-columns:1fr; gap:12px; padding:14px 16px; }
+          .qp-meta-grid { grid-template-columns:1fr 1fr; }
+          .qp-body { padding:14px 16px; }
+          .qp-action-bar { padding:10px 16px; flex-direction:column-reverse; }
+          .qp-modal-inner { border-radius:10px; }
+          .qp-table-hide { display:none; }
         }
-
-        /* ── Extra-small (≤ 400px) ────────────────────────────── */
         @media (max-width:400px) {
-          .add-grid  { grid-template-columns:1fr; }
-          .pl-grid   { grid-template-columns:1fr; }
+          .add-grid { grid-template-columns:1fr; }
+          .pl-grid { grid-template-columns:1fr; }
           .qp-meta-grid { grid-template-columns:1fr; }
-          .qb-nav-right .qb-quoteref { display:none; }
         }
-
         @media print {
           body>*:not(.print-root){display:none!important;}
           .print-root{display:block!important;position:static!important;background:#fff!important;}
         }
       `}</style>
 
-      {/* Top nav */}
-      <div className="qb-nav">
-        <div className="qb-nav-left">
-          <div style={{display:"inline-flex",alignItems:"center",flexShrink:0}}>
-            <VirtuosLogo height={26}/>
-          </div>
-          <div style={{width:"1px",height:"28px",background:"rgba(255,255,255,0.12)",flexShrink:0}}/>
-          <div className="qb-nav-title">
-            <div style={{color:"#fff",fontWeight:700,fontSize:"14px",letterSpacing:"-0.01em",whiteSpace:"nowrap"}}>Quote Builder</div>
-            <div className="qb-nav-subtitle" style={{color:"rgba(255,255,255,0.4)",fontSize:"10.5px",letterSpacing:"0.03em"}}>Asana · Smartsheet · Professional Services</div>
-          </div>
-        </div>
-        <div className="qb-nav-right">
-          <span style={{color:"rgba(255,255,255,0.4)",fontSize:"11.5px",whiteSpace:"nowrap"}} className="qb-nav-subtitle">
-            {user?.user_metadata?.full_name||user?.email}
-          </span>
-          <button onClick={()=>setView("accounts")}
-            style={{background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.75)",padding:"6px 12px",borderRadius:"6px",cursor:"pointer",fontSize:"12px",fontWeight:600,fontFamily:"inherit",flexShrink:0,whiteSpace:"nowrap"}}>
-            🏢 Accounts
-          </button>
-          <button onClick={()=>setView("history")}
-            style={{background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.75)",padding:"6px 12px",borderRadius:"6px",cursor:"pointer",fontSize:"12px",fontWeight:600,fontFamily:"inherit",flexShrink:0,whiteSpace:"nowrap"}}>
-            📋 History
-          </button>
-          <button onClick={onSignOut}
-            style={{background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.12)",color:"rgba(255,255,255,0.55)",padding:"6px 10px",borderRadius:"6px",cursor:"pointer",fontSize:"12px",fontFamily:"inherit",flexShrink:0}}>
-            Sign Out
-          </button>
-          <span className="qb-quoteref" style={{color:"rgba(255,255,255,0.4)",fontSize:"11px",fontFamily:"monospace"}}>{qd.quoteId}</span>
-          <button onClick={()=>setQd(q=>({...q,quoteId:generateQuoteId()}))}
-            style={{background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.7)",padding:"5px 10px",borderRadius:"6px",cursor:"pointer",fontSize:"11.5px",fontFamily:"inherit",flexShrink:0}}>
-            ↻
-          </button>
-          <button onClick={()=>{if(lines.length>0){saveCurrentQuote();setShowPreview(true);}}} disabled={lines.length===0}
-            style={{background:lines.length>0?"linear-gradient(135deg,#E84B9C,#F97316)":"#374151",color:"#fff",border:"none",padding:"8px 16px",borderRadius:"8px",cursor:lines.length>0?"pointer":"not-allowed",fontSize:"13px",fontWeight:700,boxShadow:lines.length>0?"0 4px 14px rgba(232,75,156,0.45)":"none",fontFamily:"inherit",transition:"all 0.2s",whiteSpace:"nowrap"}}>
-            Preview →
-          </button>
-        </div>
-      </div>
+      <Sidebar view={view} setView={handleNav} user={user} onSignOut={onSignOut}/>
 
-      <div className="qb-body">
-        <div className="qb-grid">
+      <main className="qb-content">
+        {view === "home" && (
+          <HomeView user={user} onLoadQuote={loadQuote} onNewQuote={() => { resetQuote(); setView("builder"); }}/>
+        )}
 
-          {/* LEFT */}
-          <div style={{display:"flex",flexDirection:"column",gap:"12px"}}>
-            <Panel title="Customer" icon="👤">
-              <AccountCombobox
-                value={customer.company}
-                onChange={v => setCustomer(c=>({...c, company: v}))}
-                onAccountSelect={(acc, contact) => {
-                  setAccountId(acc.id);
-                  setCustomer(c => ({
-                    ...c,
-                    company: acc.name,
-                    name:    contact?.name  || c.name,
-                    email:   contact?.email || c.email,
-                    phone:   contact?.phone || c.phone,
-                  }));
-                }}
-                user={user}
-              />
-              <Inp label="Contact Name" value={customer.name} onChange={v=>setCustomer(c=>({...c,name:v}))} placeholder="Jane Smith"/>
-              <Inp label="Email" type="email" value={customer.email} onChange={v=>setCustomer(c=>({...c,email:v}))} placeholder="jane@acme.com"/>
-              <Inp label="Phone" value={customer.phone} onChange={v=>setCustomer(c=>({...c,phone:v}))} placeholder="+91 98765 43210"/>
-            </Panel>
+        {view === "accounts" && (
+          <AccountsView onLoadQuote={q => { loadQuote(q); }} user={user}/>
+        )}
 
-            <Panel title="Quote Details" icon="📄">
-              <Inp label="Quote Name" value={qd.quoteName} onChange={v=>setQd(q=>({...q,quoteName:v}))} placeholder="Q1 2026 Proposal"/>
-              <Inp label="Owner / Sales Rep" value={qd.owner} onChange={v=>setQd(q=>({...q,owner:v}))} placeholder="Your Name"/>
-              <Inp label="Valid Until" type="date" value={qd.validUntil} onChange={v=>setQd(q=>({...q,validUntil:v}))}/>
-              <Sel label="Payment Terms" value={paymentTerms} onChange={setPaymentTerms}
-                options={["100% Advance","Net 15 days","Net 30 days"].map(v=>({value:v,label:v}))}/>
-            </Panel>
+        {view === "history" && (
+          <QuoteHistory onNewQuote={() => { resetQuote(); setView("builder"); }} onLoadQuote={loadQuote} user={user}/>
+        )}
 
-            <Panel title="Subscription Period" icon="📅">
-              <Sel label="Billing Cycle" value={billingCycle} onChange={handleCycle}
-                options={[{value:"monthly",label:"Monthly (custom duration)"},{value:"quarterly",label:"Quarterly"},{value:"annual",label:"Annual"}]}/>
-              {billingCycle==="monthly"&&(
-                <Inp label="Number of Months" type="number" min="1" max="36" value={monthCount} onChange={handleMonths}/>
-              )}
-              <Inp label="Start Date" type="date" value={startDate} onChange={handleStart}/>
-              <div style={{display:"flex",flexDirection:"column",gap:"3px"}}>
-                <Label>End Date (auto-calculated)</Label>
-                <div style={{background:"#F1F5F9",borderRadius:"8px",padding:"8px 11px",fontSize:"13.5px",color:V.ink,fontWeight:600,border:`1px solid ${V.border}`}}>{endDate||"—"}</div>
-              </div>
-              {days>0&&(
-                <div style={{background:"#EFF6FF",borderRadius:"8px",padding:"8px 11px",fontSize:"12px",color:"#1D4ED8",fontWeight:600,border:"1px solid #BFDBFE"}}>
-                  📆 {days} days {billingCycle==="annual"&&days>=364?" · Full annual period":""}{prPct?` · ${prPct}`:""}
+        {view === "builder" && (
+          <>
+            {/* Builder top bar */}
+            <div className="qb-builder-bar">
+              <div>
+                <div style={{ fontSize: "15px", fontWeight: 800, color: V.navy }}>
+                  {customer.company ? `Quote · ${customer.company}` : "New Quote"}
                 </div>
-              )}
-            </Panel>
-
-            <Panel title="Currency & Tax" icon="💱">
-              <Sel label="Currency" value={currency.code} onChange={v=>setCurrency(CURRENCIES.find(c=>c.code===v))}
-                options={CURRENCIES.map(c=>({value:c.code,label:`${c.code} — ${c.name} (${c.symbol})`}))}/>
-              {currency.code!=="USD"&&(
-                <Inp label={`FX Rate (1 USD → ${currency.code})`} type="number" min="0.01"
-                  value={currency.rate} onChange={v=>setCurrency(c=>({...c,rate:parseFloat(v)||c.rate}))}/>
-              )}
-              <Sel label="Tax" value={taxConfig.label} onChange={v=>setTaxConfig(TAX_RATES.find(t=>t.label===v))}
-                options={TAX_RATES.map(t=>({value:t.label,label:t.label}))}/>
-            </Panel>
-
-            <Panel title="Notes" icon="📝">
-              <textarea value={qd.notes} onChange={e=>setQd(q=>({...q,notes:e.target.value}))}
-                placeholder="Additional notes, special conditions..."
-                rows={3} style={{width:"100%",border:`1.5px solid ${V.border}`,borderRadius:"8px",padding:"9px 11px",fontSize:"13px",resize:"vertical",outline:"none",fontFamily:"inherit",color:V.ink}}/>
-            </Panel>
-          </div>
-
-          {/* RIGHT */}
-          <div style={{display:"flex",flexDirection:"column",gap:"12px"}}>
-
-            {/* Add products */}
-            <div style={{background:V.white,borderRadius:"12px",padding:"16px",border:`1px solid ${V.border}`,boxShadow:"0 1px 3px rgba(0,0,0,0.04)"}}>
-              <div style={{fontSize:"11px",fontWeight:800,color:V.ink,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:"11px"}}>Add Products & Services</div>
-              <div className="add-grid">
-                {Object.entries(PRODUCTS).map(([key,p])=>(
-                  <button key={key} onClick={()=>addLine(key)}
-                    style={{background:p.color+"0d",border:`2px dashed ${p.color}44`,borderRadius:"10px",padding:"12px",cursor:"pointer",textAlign:"left",transition:"all 0.15s",fontFamily:"inherit"}}
-                    onMouseEnter={e=>{e.currentTarget.style.background=p.color+"1a";e.currentTarget.style.borderColor=p.color;}}
-                    onMouseLeave={e=>{e.currentTarget.style.background=p.color+"0d";e.currentTarget.style.borderColor=p.color+"44";}}>
-                    <div style={{fontSize:"12.5px",fontWeight:700,color:p.color}}>+ {p.label}</div>
-                    <div style={{fontSize:"10.5px",color:"#94A3B8",marginTop:"2px"}}>
-                      {p.tiers.length} tiers{p.addOns.length>0?` · ${p.addOns.length} add-ons`:""}
-                    </div>
-                  </button>
-                ))}
+                <div style={{ fontSize: "11px", color: V.muted, fontFamily: "monospace", marginTop: "1px" }}>{qd.quoteId}</div>
+              </div>
+              <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
+                <button onClick={() => setQd(q => ({ ...q, quoteId: generateQuoteId() }))}
+                  style={{ background: "#F1F5F9", border: `1px solid ${V.border}`, color: V.muted, padding: "6px 11px", borderRadius: "7px", cursor: "pointer", fontSize: "13px", fontFamily: "inherit" }}>
+                  ↻ New ID
+                </button>
+                <button onClick={() => { if (lines.length > 0) { saveCurrentQuote(); setShowPreview(true); } }} disabled={lines.length === 0}
+                  style={{ background: lines.length > 0 ? "linear-gradient(135deg,#E84B9C,#F97316)" : "#CBD5E1", color: "#fff", border: "none", padding: "8px 20px", borderRadius: "8px", cursor: lines.length > 0 ? "pointer" : "not-allowed", fontSize: "13px", fontWeight: 700, boxShadow: lines.length > 0 ? "0 4px 14px rgba(232,75,156,0.4)" : "none", fontFamily: "inherit", transition: "all 0.2s", whiteSpace: "nowrap" }}>
+                  Preview & Export →
+                </button>
               </div>
             </div>
 
-            {lines.length===0?(
-              <div style={{background:V.white,borderRadius:"12px",padding:"48px 24px",textAlign:"center",border:`2px dashed ${V.border}`}}>
-                <div style={{fontSize:"36px",marginBottom:"8px"}}>🛒</div>
-                <div style={{fontSize:"14px",fontWeight:700,color:V.ink}}>No products added yet</div>
-                <div style={{fontSize:"12px",color:"#94A3B8",marginTop:"3px"}}>Click above to add Asana, Smartsheet, or Professional Services</div>
-              </div>
-            ):(
-              <div style={{display:"flex",flexDirection:"column",gap:"8px"}}>
-                {lines.map((line,i)=>(
-                  <ProductLine key={i} line={line}
-                    onUpdate={u=>setLines(prev=>prev.map((l,idx)=>idx===i?u:l))}
-                    onRemove={()=>setLines(prev=>prev.filter((_,idx)=>idx!==i))}
-                    billingCycle={billingCycle} startDate={startDate} endDate={endDate}/>
-                ))}
-              </div>
-            )}
+            <div className="qb-body">
+              <div className="qb-grid">
 
-            {/* Summary */}
-            {lines.length>0&&(
-              <div style={{background:"linear-gradient(135deg,#0D1B3E,#1A2C55)",borderRadius:"12px",padding:"20px 22px",color:"#fff",boxShadow:"0 6px 20px rgba(13,27,62,0.3)"}}>
-                <div style={{fontSize:"11px",fontWeight:800,color:"rgba(255,255,255,0.4)",textTransform:"uppercase",letterSpacing:"0.09em",marginBottom:"12px"}}>Quote Summary</div>
-                <div style={{display:"flex",flexDirection:"column",gap:"6px"}}>
-                  {[
-                    ["Annual List (USD)", `$${totals.annualList.toLocaleString("en-US",{minimumFractionDigits:2})}`, "#94A3B8"],
-                    ["Discount (USD)",    `-$${totals.discTotal.toLocaleString("en-US",{minimumFractionDigits:2})}`, "#FCA5A5"],
-                    ["Sub-Total (USD)",   `$${totals.subUSD.toLocaleString("en-US",{minimumFractionDigits:2})}`, "#E2E8F0"],
-                    currency.code!=="USD"?[`Sub-Total (${currency.code})`, fmtC(totals.subLocal,currency.symbol), "#BAE6FD"]:null,
-                    taxConfig.rate>0?[taxConfig.label, fmtC(totals.taxLocal,currency.symbol), "#FDE68A"]:null,
-                  ].filter(Boolean).map(([l,v,c])=>(
-                    <div key={l} style={{display:"flex",justifyContent:"space-between",paddingBottom:"6px",borderBottom:"1px solid rgba(255,255,255,0.06)"}}>
-                      <span style={{fontSize:"12.5px",color:"rgba(255,255,255,0.5)"}}>{l}</span>
-                      <span style={{fontSize:"12.5px",fontWeight:600,color:c}}>{v}</span>
+                {/* LEFT panels */}
+                <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                  <Panel title="Customer" icon="👤">
+                    <AccountCombobox
+                      value={customer.company}
+                      onChange={v => setCustomer(c => ({ ...c, company: v }))}
+                      onAccountSelect={(acc, contact) => {
+                        setAccountId(acc.id);
+                        setCustomer(c => ({ ...c, company: acc.name, name: contact?.name||c.name, email: contact?.email||c.email, phone: contact?.phone||c.phone }));
+                      }}
+                      user={user}
+                    />
+                    <Inp label="Contact Name" value={customer.name} onChange={v => setCustomer(c => ({ ...c, name: v }))} placeholder="Jane Smith"/>
+                    <Inp label="Email" type="email" value={customer.email} onChange={v => setCustomer(c => ({ ...c, email: v }))} placeholder="jane@acme.com"/>
+                    <Inp label="Phone" value={customer.phone} onChange={v => setCustomer(c => ({ ...c, phone: v }))} placeholder="+91 98765 43210"/>
+                  </Panel>
+
+                  <Panel title="Quote Details" icon="📄">
+                    <Inp label="Quote Name" value={qd.quoteName} onChange={v => setQd(q => ({ ...q, quoteName: v }))} placeholder="Q1 2026 Proposal"/>
+                    <Inp label="Owner / Sales Rep" value={qd.owner} onChange={v => setQd(q => ({ ...q, owner: v }))} placeholder="Your Name"/>
+                    <Inp label="Valid Until" type="date" value={qd.validUntil} onChange={v => setQd(q => ({ ...q, validUntil: v }))}/>
+                    <Sel label="Payment Terms" value={paymentTerms} onChange={setPaymentTerms}
+                      options={["100% Advance","Net 15 days","Net 30 days"].map(v => ({ value: v, label: v }))}/>
+                  </Panel>
+
+                  <Panel title="Subscription Period" icon="📅">
+                    <Sel label="Billing Cycle" value={billingCycle} onChange={handleCycle}
+                      options={[{value:"monthly",label:"Monthly (custom duration)"},{value:"quarterly",label:"Quarterly"},{value:"annual",label:"Annual"}]}/>
+                    {billingCycle === "monthly" && <Inp label="Number of Months" type="number" min="1" max="36" value={monthCount} onChange={handleMonths}/>}
+                    <Inp label="Start Date" type="date" value={startDate} onChange={handleStart}/>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
+                      <Label>End Date (auto-calculated)</Label>
+                      <div style={{ background: "#F1F5F9", borderRadius: "8px", padding: "8px 11px", fontSize: "13.5px", color: V.ink, fontWeight: 600, border: `1px solid ${V.border}` }}>{endDate || "—"}</div>
                     </div>
-                  ))}
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",paddingTop:"4px"}}>
-                    <span style={{fontSize:"13px",fontWeight:700,color:"rgba(255,255,255,0.7)"}}>Total ({currency.code})</span>
-                    <span style={{fontSize:"clamp(18px,5vw,22px)",fontWeight:900,color:"#fff"}}>{fmtC(totals.grand,currency.symbol)}</span>
+                    {days > 0 && (
+                      <div style={{ background: "#EFF6FF", borderRadius: "8px", padding: "8px 11px", fontSize: "12px", color: "#1D4ED8", fontWeight: 600, border: "1px solid #BFDBFE" }}>
+                        📆 {days} days{billingCycle === "annual" && days >= 364 ? " · Full annual period" : ""}{prPct ? ` · ${prPct}` : ""}
+                      </div>
+                    )}
+                  </Panel>
+
+                  <Panel title="Currency & Tax" icon="💱">
+                    <Sel label="Currency" value={currency.code} onChange={v => setCurrency(CURRENCIES.find(c => c.code === v))}
+                      options={CURRENCIES.map(c => ({ value: c.code, label: `${c.code} — ${c.name} (${c.symbol})` }))}/>
+                    {currency.code !== "USD" && (
+                      <Inp label={`FX Rate (1 USD → ${currency.code})`} type="number" min="0.01"
+                        value={currency.rate} onChange={v => setCurrency(c => ({ ...c, rate: parseFloat(v)||c.rate }))}/>
+                    )}
+                    <Sel label="Tax" value={taxConfig.label} onChange={v => setTaxConfig(TAX_RATES.find(t => t.label === v))}
+                      options={TAX_RATES.map(t => ({ value: t.label, label: t.label }))}/>
+                  </Panel>
+
+                  <Panel title="Notes" icon="📝">
+                    <textarea value={qd.notes} onChange={e => setQd(q => ({ ...q, notes: e.target.value }))}
+                      placeholder="Additional notes, special conditions…" rows={3}
+                      style={{ width: "100%", border: `1.5px solid ${V.border}`, borderRadius: "8px", padding: "9px 11px", fontSize: "13px", resize: "vertical", outline: "none", fontFamily: "inherit", color: V.ink }}/>
+                  </Panel>
+                </div>
+
+                {/* RIGHT products + summary */}
+                <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                  <div style={{ background: V.white, borderRadius: "12px", padding: "16px", border: `1px solid ${V.border}`, boxShadow: "0 1px 3px rgba(0,0,0,0.04)" }}>
+                    <div style={{ fontSize: "11px", fontWeight: 800, color: V.ink, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "11px" }}>Add Products & Services</div>
+                    <div className="add-grid">
+                      {Object.entries(PRODUCTS).map(([key, p]) => (
+                        <button key={key} onClick={() => addLine(key)}
+                          style={{ background: p.color+"0d", border: `2px dashed ${p.color}44`, borderRadius: "10px", padding: "12px", cursor: "pointer", textAlign: "left", transition: "all 0.15s", fontFamily: "inherit" }}
+                          onMouseEnter={e => { e.currentTarget.style.background = p.color+"1a"; e.currentTarget.style.borderColor = p.color; }}
+                          onMouseLeave={e => { e.currentTarget.style.background = p.color+"0d"; e.currentTarget.style.borderColor = p.color+"44"; }}>
+                          <div style={{ fontSize: "12.5px", fontWeight: 700, color: p.color }}>+ {p.label}</div>
+                          <div style={{ fontSize: "10.5px", color: "#94A3B8", marginTop: "2px" }}>{p.tiers.length} tiers{p.addOns.length > 0 ? ` · ${p.addOns.length} add-ons` : ""}</div>
+                        </button>
+                      ))}
+                    </div>
                   </div>
+
+                  {lines.length === 0 ? (
+                    <div style={{ background: V.white, borderRadius: "12px", padding: "48px 24px", textAlign: "center", border: `2px dashed ${V.border}` }}>
+                      <div style={{ fontSize: "36px", marginBottom: "8px" }}>🛒</div>
+                      <div style={{ fontSize: "14px", fontWeight: 700, color: V.ink }}>No products added yet</div>
+                      <div style={{ fontSize: "12px", color: "#94A3B8", marginTop: "3px" }}>Click above to add Asana, Smartsheet, or Professional Services</div>
+                    </div>
+                  ) : (
+                    <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                      {lines.map((line, i) => (
+                        <ProductLine key={i} line={line}
+                          onUpdate={u => setLines(prev => prev.map((l, idx) => idx === i ? u : l))}
+                          onRemove={() => setLines(prev => prev.filter((_, idx) => idx !== i))}
+                          billingCycle={billingCycle} startDate={startDate} endDate={endDate}/>
+                      ))}
+                    </div>
+                  )}
+
+                  {lines.length > 0 && (
+                    <div style={{ background: "linear-gradient(135deg,#0D1B3E,#1A2C55)", borderRadius: "12px", padding: "20px 22px", color: "#fff", boxShadow: "0 6px 20px rgba(13,27,62,0.3)" }}>
+                      <div style={{ fontSize: "11px", fontWeight: 800, color: "rgba(255,255,255,0.4)", textTransform: "uppercase", letterSpacing: "0.09em", marginBottom: "12px" }}>Quote Summary</div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                        {[
+                          ["Annual List (USD)", `$${totals.annualList.toLocaleString("en-US",{minimumFractionDigits:2})}`, "#94A3B8"],
+                          ["Discount (USD)",   `-$${totals.discTotal.toLocaleString("en-US",{minimumFractionDigits:2})}`, "#FCA5A5"],
+                          ["Sub-Total (USD)",   `$${totals.subUSD.toLocaleString("en-US",{minimumFractionDigits:2})}`, "#E2E8F0"],
+                          currency.code !== "USD" ? [`Sub-Total (${currency.code})`, fmtC(totals.subLocal, currency.symbol), "#BAE6FD"] : null,
+                          taxConfig.rate > 0 ? [taxConfig.label, fmtC(totals.taxLocal, currency.symbol), "#FDE68A"] : null,
+                        ].filter(Boolean).map(([l, v, c]) => (
+                          <div key={l} style={{ display: "flex", justifyContent: "space-between", paddingBottom: "6px", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+                            <span style={{ fontSize: "12.5px", color: "rgba(255,255,255,0.5)" }}>{l}</span>
+                            <span style={{ fontSize: "12.5px", fontWeight: 600, color: c }}>{v}</span>
+                          </div>
+                        ))}
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: "4px" }}>
+                          <span style={{ fontSize: "13px", fontWeight: 700, color: "rgba(255,255,255,0.7)" }}>Total ({currency.code})</span>
+                          <span style={{ fontSize: "clamp(18px,5vw,22px)", fontWeight: 900, color: "#fff" }}>{fmtC(totals.grand, currency.symbol)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
-            )}
-          </div>
-        </div>
-      </div>
+            </div>
+          </>
+        )}
+      </main>
 
-      {showPreview&&(
+      {showPreview && (
         <QuotePreview
-          data={{lines,customer,qd,currency,billingCycle,monthCount,startDate,endDate,taxConfig,paymentTerms}}
-          onClose={()=>setShowPreview(false)}/>
+          data={{ lines, customer, qd, currency, billingCycle, monthCount, startDate, endDate, taxConfig, paymentTerms }}
+          onClose={() => setShowPreview(false)}/>
       )}
     </div>
   );
