@@ -1069,14 +1069,21 @@ async function createAccountWithContact({ name, industry, country, website, note
     name, industry: industry || null, country: country || null, website: website || null,
     notes: notes || null, created_by: user.id, owner_id: user.id,
   }).select().single();
-  if (aErr) throw aErr;
+  if (aErr) {
+    console.error("Account insert error:", aErr);
+    throw new Error(aErr.message + (aErr.details ? ` — ${aErr.details}` : "") + (aErr.hint ? ` (${aErr.hint})` : ""));
+  }
   let contact = null;
-  if (contactName) {
-    const { data: c } = await supabase.from("contacts").insert({
-      account_id: acc.id, name: contactName, email: contactEmail || null,
+  if (contactName && contactName.trim()) {
+    const { data: c, error: cErr } = await supabase.from("contacts").insert({
+      account_id: acc.id, name: contactName.trim(), email: contactEmail || null,
       phone: contactPhone || null, designation: contactDesignation || null,
       is_primary: true, created_by: user.id,
     }).select().single();
+    if (cErr) {
+      console.error("Contact insert error:", cErr);
+      throw new Error(cErr.message + (cErr.details ? ` — ${cErr.details}` : ""));
+    }
     contact = c;
   }
   return { account: acc, contact };
@@ -1173,7 +1180,7 @@ function AccountCombobox({ value, onChange, onAccountSelect, user }) {
       {showDrawer && (
         <AccountDrawer
           initialName={query} user={user}
-          onSave={({ account, contact }) => { setQuery(account.name); onChange(account.name); onAccountSelect(account, contact); setShowDrawer(false); }}
+          onSave={result => { setQuery(result.account.name); onChange(result.account.name); onAccountSelect(result.account, result.contact); setShowDrawer(false); }}
           onClose={() => setShowDrawer(false)}
         />
       )}
@@ -1205,7 +1212,12 @@ function AccountDrawer({ initialName, user, onSave, onClose }) {
       }, user);
       onSave(result);
     } catch(e) {
-      setErr(e.message || "Failed to create account."); setSaving(false);
+      const msg = e.message || "Failed to create account.";
+      const hint = msg.includes("does not exist")
+        ? " — The accounts table may not be set up yet. Please run supabase_phase2_migration.sql in your Supabase SQL editor."
+        : "";
+      setErr(msg + hint);
+      setSaving(false);
     }
   }
 
