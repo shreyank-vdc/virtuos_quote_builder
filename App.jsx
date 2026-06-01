@@ -119,7 +119,13 @@ function autoEndDate(start,cycle,months){
   const d=new Date(start);
   if(cycle==="annual"){d.setFullYear(d.getFullYear()+1);d.setDate(d.getDate()-1);}
   else if(cycle==="quarterly"){d.setMonth(d.getMonth()+3);d.setDate(d.getDate()-1);}
-  else{d.setMonth(d.getMonth()+months);d.setDate(d.getDate()-1);}
+  else if(cycle==="monthly"){
+    // Day-based so fractional months (e.g. 6.5) work precisely
+    const days=Math.round(parseFloat(months)*30.4375);
+    d.setDate(d.getDate()+days-1);
+  }
+  // "custom" — caller manages endDate directly, return empty
+  else return "";
   return d.toISOString().split("T")[0];
 }
 function computeLines(lines, startDate, endDate, billingCycle) {
@@ -274,88 +280,182 @@ async function exportQuoteWord({cl,annualList,discTotal,subUSD,subLocal,taxLocal
   const f$ = n => `$${n.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}`;
   const fC = (n,s) => `${s}${n.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}`;
   const fD = s => s ? new Date(s).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}) : "—";
-  const cycleLabel = billingCycle==="monthly"?`Monthly (${monthCount} mo)`:billingCycle.charAt(0).toUpperCase()+billingCycle.slice(1);
+  const cycleLabel = billingCycle==="monthly"?`Monthly (${monthCount} mo)`:billingCycle==="custom"?"Custom Period":billingCycle.charAt(0).toUpperCase()+billingCycle.slice(1);
 
   const hasDiscount = cl.some(l=>l.disc>0);
-  const tableRows = cl.map(l=>`
+  const cols = hasDiscount ? 5 : 4;
+
+  // Column widths as percentages
+  const colW = hasDiscount
+    ? ["44%","8%","16%","14%","18%"]
+    : ["50%","9%","19%","22%"];
+
+  const tableRows = cl.map(l=>{
+    const isPro = l.productCategory==="professional_services";
+    const unitLabel = isPro ? `${f$(l.ratePerHour||0)}/hr` : f$(l.item?.unitPrice||0);
+    const qtyLabel  = isPro ? `${l.qty} hrs` : `${l.qty}`;
+    return `
     <tr>
-      <td style="border:1px solid #ccc;padding:6px 10px;">${l.item?.name||""}<br/><small style="color:#666;">${l.item?.description||""}</small></td>
-      <td style="border:1px solid #ccc;padding:6px 10px;text-align:center;">${l.qty}</td>
-      <td style="border:1px solid #ccc;padding:6px 10px;text-align:right;">${f$(l.item?.unitPrice||0)}</td>
-      ${hasDiscount?`<td style="border:1px solid #ccc;padding:6px 10px;text-align:right;">${l.disc>0?`-${f$(l.disc)}`:"—"}</td>`:""}
-      <td style="border:1px solid #ccc;padding:6px 10px;text-align:right;font-weight:bold;">${f$(l.net)}</td>
-    </tr>`).join("");
+      <td style="border:1px solid #CBD5E1;padding:7pt 9pt;font-size:10pt;">
+        <b>${l.item?.name||""}</b>
+        ${l.item?.description?`<br/><span style="font-size:8.5pt;color:#64748B;">${l.item.description}</span>`:""}
+      </td>
+      <td style="border:1px solid #CBD5E1;padding:7pt 9pt;text-align:center;font-size:10pt;">${qtyLabel}</td>
+      <td style="border:1px solid #CBD5E1;padding:7pt 9pt;text-align:right;font-size:10pt;">${unitLabel}</td>
+      ${hasDiscount?`<td style="border:1px solid #CBD5E1;padding:7pt 9pt;text-align:right;font-size:10pt;color:#DC2626;">${l.disc>0?`-${f$(l.disc)}`:"—"}</td>`:""}
+      <td style="border:1px solid #CBD5E1;padding:7pt 9pt;text-align:right;font-size:10pt;font-weight:bold;">${f$(l.net)}</td>
+    </tr>`;
+  }).join("");
 
   const tcBlocks = cats.map(cat=>`
-    <p><strong>${PRODUCTS[cat].label}</strong><br/>${PRODUCTS[cat].tc}</p>`).join("");
+    <p style="margin:6pt 0 2pt;font-size:10pt;font-weight:bold;color:#0D1B3E;">${PRODUCTS[cat].label}</p>
+    <p style="margin:0 0 10pt;font-size:9pt;color:#475569;line-height:1.5;">${PRODUCTS[cat].tc}</p>`).join("");
 
-  const html = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
-<head><meta charset='utf-8'><title>Quote ${qd.quoteId}</title>
+  const metaRows = [
+    ["Quote Name",    qd.quoteName||"—"],
+    ["Prepared By",   qd.owner||"—"],
+    ["Issue Date",    qd.createdOn||"—"],
+    ["Valid Until",   qd.validUntil?fD(qd.validUntil):"30 days"],
+    ["Period",        `${fD(startDate)} → ${fD(endDate)}`],
+    ["Billing",       cycleLabel],
+    ["Payment Terms", paymentTerms],
+  ].map(([k,v])=>`
+    <tr>
+      <td style="border:none;padding:2pt 12pt 2pt 0;font-size:9pt;color:#64748B;white-space:nowrap;vertical-align:top;">${k}</td>
+      <td style="border:none;padding:2pt 0;font-size:9pt;font-weight:600;color:#0F172A;vertical-align:top;">${v}</td>
+    </tr>`).join("");
+
+  const sigBlock = (title, company) => `
+    <td style="border:none;width:48%;vertical-align:top;padding:0 12pt 0 0;">
+      <p style="margin:0 0 10pt;font-size:10pt;font-weight:bold;color:#0D1B3E;">${title}</p>
+      ${[["Authorised Signatory Name",""],["Title / Designation",""],["Company Name",company],["Date",""]].map(([lbl,val])=>`
+        <p style="margin:12pt 0 2pt;font-size:8.5pt;color:#64748B;">${lbl}</p>
+        <p style="margin:0;border-bottom:1pt solid #94A3B8;min-height:16pt;font-size:10pt;">${val}</p>`).join("")}
+      <p style="margin:12pt 0 2pt;font-size:8.5pt;color:#64748B;">Signature</p>
+      <p style="margin:0;border:1pt solid #94A3B8;height:50pt;"></p>
+    </td>`;
+
+  const html = `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns:o="urn:schemas-microsoft-com:office:office"
+      xmlns:w="urn:schemas-microsoft-com:office:word"
+      xmlns="http://www.w3.org/TR/REC-html40">
+<head>
+<meta charset="utf-8"/>
+<meta name="ProgId" content="Word.Document"/>
+<!--[if gte mso 9]><xml>
+<w:WordDocument>
+  <w:View>Print</w:View>
+  <w:Zoom>90</w:Zoom>
+  <w:DoNotOptimizeForBrowser/>
+</w:WordDocument>
+</xml><![endif]-->
+<title>Quote ${qd.quoteId}</title>
 <style>
-  body{font-family:Arial,sans-serif;font-size:11pt;color:#1E293B;margin:2cm;}
-  h1{color:#0D1B3E;} h2{color:#0D1B3E;border-bottom:1px solid #E2E8F0;padding-bottom:4px;}
-  table{border-collapse:collapse;width:100%;margin-bottom:16pt;}
-  th{background:#0D1B3E;color:#fff;padding:6px 10px;border:1px solid #0D1B3E;text-align:left;}
-  .sig-box{border:1px solid #ccc;height:60px;margin-top:6px;}
-  .field-line{border-bottom:1px solid #ccc;margin-top:4px;min-height:20px;}
-</style></head>
+  @page {
+    size:A4; margin:2cm 2cm 2.5cm 2cm;
+    mso-header-margin:1cm; mso-footer-margin:1cm;
+  }
+  body {
+    font-family:Calibri,Arial,sans-serif;font-size:11pt;
+    color:#1E293B;margin:0;padding:0;
+    mso-margin-top-alt:auto;mso-margin-bottom-alt:auto;
+  }
+  p  { margin:0 0 6pt; line-height:1.4; }
+  h1 { font-size:18pt;font-weight:700;color:#0D1B3E;margin:0 0 4pt;border:none; }
+  h2 { font-size:12pt;font-weight:700;color:#0D1B3E;margin:16pt 0 6pt;
+       border-bottom:1.5pt solid #E2E8F0;padding-bottom:3pt; }
+  table { border-collapse:collapse;width:100%;mso-table-lspace:0pt;mso-table-rspace:0pt; }
+  td,th { font-family:Calibri,Arial,sans-serif; }
+  th { background:#0D1B3E;color:#fff;font-size:9.5pt;font-weight:700;
+       padding:7pt 9pt;text-align:left;border:1pt solid #0D1B3E; }
+  .total-row td { background:#0D1B3E;color:#fff;font-size:12pt;font-weight:700;padding:8pt 9pt; }
+  .subtotal-row td { background:#F8FAFC;font-weight:600;font-size:10pt;padding:6pt 9pt;border:1pt solid #CBD5E1; }
+</style>
+</head>
 <body>
-<p>${LOGO_HTML(44)}</p>
-<h1>Sales Quotation — ${qd.quoteId}</h1>
-<table style="border:none;width:100%;margin-bottom:20pt;">
-  <tr><td style="border:none;width:50%;vertical-align:top;">
-    <strong>Prepared For</strong><br/>
-    ${customer.name||"—"}<br/>${customer.company||"—"}<br/>${customer.email||""}${customer.phone?" · "+customer.phone:""}
-  </td><td style="border:none;width:50%;vertical-align:top;">
-    <table style="border:none;font-size:10pt;">
-      ${[["Quote Name",qd.quoteName||"—"],["Prepared By",qd.owner||"—"],["Issue Date",qd.createdOn],["Valid Until",qd.validUntil?fD(qd.validUntil):"30 days"],["Period",`${fD(startDate)} → ${fD(endDate)}`],["Billing",cycleLabel],["Payment Terms",paymentTerms]].map(([k,v])=>`<tr><td style="border:none;color:#64748B;padding:1px 8px 1px 0;font-size:9pt;">${k}</td><td style="border:none;font-weight:600;padding:1px 0;">${v}</td></tr>`).join("")}
-    </table>
-  </td></tr>
+
+<!-- Logo + title -->
+<table style="border:none;width:100%;margin-bottom:14pt;">
+  <tr>
+    <td style="border:none;vertical-align:middle;width:60%;">
+      <p style="margin:0;">${LOGO_HTML(36)}</p>
+      <h1 style="margin-top:8pt;">Sales Quotation</h1>
+      <p style="margin:0;font-size:10pt;color:#64748B;font-family:Courier New,monospace;">${qd.quoteId}</p>
+    </td>
+    <td style="border:none;vertical-align:top;width:40%;text-align:right;">
+      <table style="border:none;width:auto;margin-left:auto;">${metaRows}</table>
+    </td>
+  </tr>
 </table>
 
-<h2>Products &amp; Services</h2>
-<table><thead><tr>
-  <th>Product / Description</th><th style="text-align:center;">Seats</th>
-  <th style="text-align:right;">Unit Price (USD/yr)</th>
-  ${hasDiscount?`<th style="text-align:right;">Discount</th>`:""}
-  <th style="text-align:right;">Net Amount (USD)</th>
-</tr></thead><tbody>${tableRows}</tbody>
-<tfoot>
-  <tr><td colspan="${hasDiscount?4:3}" style="border:1px solid #ccc;padding:6px 10px;text-align:right;">Sub-Total (USD)</td><td style="border:1px solid #ccc;padding:6px 10px;text-align:right;font-weight:bold;">${f$(subUSD)}</td></tr>
-  ${currency.code!=="USD"?`<tr><td colspan="${hasDiscount?4:3}" style="border:1px solid #ccc;padding:6px 10px;text-align:right;">Sub-Total (${currency.code}) @ ${currency.rate.toFixed(2)}</td><td style="border:1px solid #ccc;padding:6px 10px;text-align:right;font-weight:bold;">${fC(subLocal,sym)}</td></tr>`:""}
-  ${taxConfig.rate>0?`<tr><td colspan="${hasDiscount?4:3}" style="border:1px solid #ccc;padding:6px 10px;text-align:right;">${taxConfig.label}</td><td style="border:1px solid #ccc;padding:6px 10px;text-align:right;">${fC(taxLocal,sym)}</td></tr>`:""}
-  <tr style="background:#0D1B3E;color:#fff;"><td colspan="${hasDiscount?4:3}" style="border:1px solid #0D1B3E;padding:8px 10px;text-align:right;font-weight:bold;">TOTAL (${currency.code})</td><td style="border:1px solid #0D1B3E;padding:8px 10px;text-align:right;font-size:14pt;font-weight:bold;">${fC(grandLocal,sym)}</td></tr>
-</tfoot></table>
+<!-- Bill to -->
+<table style="border:none;width:100%;margin-bottom:14pt;background:#F8FAFC;border-left:3pt solid #0D1B3E;">
+  <tr>
+    <td style="border:none;padding:10pt 14pt;">
+      <p style="margin:0 0 4pt;font-size:8.5pt;font-weight:700;color:#64748B;text-transform:uppercase;letter-spacing:0.08em;">Prepared For</p>
+      <p style="margin:0;font-size:12pt;font-weight:700;color:#0D1B3E;">${customer.company||"—"}</p>
+      <p style="margin:2pt 0 0;font-size:10pt;color:#475569;">${customer.name||""}${customer.email?" · "+customer.email:""}${customer.phone?" · "+customer.phone:""}</p>
+    </td>
+  </tr>
+</table>
 
+<!-- Products table -->
+<h2>Products &amp; Services</h2>
+<table style="margin-bottom:0;">
+  <colgroup>${colW.map(w=>`<col style="width:${w};"/>`).join("")}</colgroup>
+  <thead><tr>
+    <th>Product / Service</th>
+    <th style="text-align:center;">Qty</th>
+    <th style="text-align:right;">Unit Price</th>
+    ${hasDiscount?`<th style="text-align:right;">Discount</th>`:""}
+    <th style="text-align:right;">Net (USD)</th>
+  </tr></thead>
+  <tbody>${tableRows}</tbody>
+  <tfoot>
+    <tr class="subtotal-row">
+      <td colspan="${cols-1}" style="text-align:right;border:1pt solid #CBD5E1;">Sub-Total (USD)</td>
+      <td style="text-align:right;border:1pt solid #CBD5E1;">${f$(subUSD)}</td>
+    </tr>
+    ${currency.code!=="USD"?`<tr class="subtotal-row">
+      <td colspan="${cols-1}" style="text-align:right;border:1pt solid #CBD5E1;">Sub-Total (${currency.code}) @ ${currency.rate.toFixed(4)}</td>
+      <td style="text-align:right;border:1pt solid #CBD5E1;">${fC(subLocal,sym)}</td>
+    </tr>`:""}
+    ${taxConfig.rate>0?`<tr class="subtotal-row">
+      <td colspan="${cols-1}" style="text-align:right;border:1pt solid #CBD5E1;">${taxConfig.label} (${taxConfig.rate}%)</td>
+      <td style="text-align:right;border:1pt solid #CBD5E1;">${fC(taxLocal,sym)}</td>
+    </tr>`:""}
+    <tr class="total-row">
+      <td colspan="${cols-1}" style="text-align:right;border:1pt solid #0D1B3E;">TOTAL (${currency.code})</td>
+      <td style="text-align:right;font-size:14pt;border:1pt solid #0D1B3E;">${fC(grandLocal,sym)}</td>
+    </tr>
+  </tfoot>
+</table>
+
+<!-- T&C -->
 <h2>Terms &amp; Conditions</h2>
 ${tcBlocks}
-${qd.notes?`<h2>Notes</h2><p>${qd.notes}</p>`:""}
+${qd.notes?`<h2>Notes</h2><p style="font-size:10pt;">${qd.notes}</p>`:""}
 
+<!-- Signatures -->
 <h2>Acceptance &amp; Authorisation</h2>
-<p>By signing below, both parties agree to the terms and pricing set forth in this quotation (${qd.quoteId}). Payment Terms: <strong>${paymentTerms}</strong>.</p>
+<p style="font-size:9.5pt;color:#475569;margin-bottom:14pt;">
+  By signing below, both parties agree to the terms and pricing in quotation <b>${qd.quoteId}</b>.
+  Payment Terms: <b>${paymentTerms}</b>. Subscription period: <b>${fD(startDate)}</b> to <b>${fD(endDate)}</b>.
+</p>
 <table style="border:none;"><tr>
-  <td style="border:none;width:48%;vertical-align:top;padding-right:20px;">
-    <strong style="color:#0D1B3E;">Customer Authorisation</strong>
-    <p class="field-label" style="font-size:9pt;color:#64748B;margin:12px 0 2px;">Authorised Signatory Name</p><div class="field-line"></div>
-    <p class="field-label" style="font-size:9pt;color:#64748B;margin:12px 0 2px;">Title / Designation</p><div class="field-line"></div>
-    <p class="field-label" style="font-size:9pt;color:#64748B;margin:12px 0 2px;">Company Name</p><div class="field-line">${customer.company||""}</div>
-    <p class="field-label" style="font-size:9pt;color:#64748B;margin:12px 0 2px;">Signature</p><div class="sig-box"></div>
-    <p class="field-label" style="font-size:9pt;color:#64748B;margin:12px 0 2px;">Date</p><div class="field-line"></div>
-  </td>
-  <td style="border:none;width:48%;vertical-align:top;padding-left:20px;">
-    <strong style="color:#0D1B3E;">Virtuos Digital — Authorisation</strong>
-    <p class="field-label" style="font-size:9pt;color:#64748B;margin:12px 0 2px;">Authorised Signatory Name</p><div class="field-line"></div>
-    <p class="field-label" style="font-size:9pt;color:#64748B;margin:12px 0 2px;">Title / Designation</p><div class="field-line"></div>
-    <p class="field-label" style="font-size:9pt;color:#64748B;margin:12px 0 2px;">Company Name</p><div class="field-line">Virtuos Digital</div>
-    <p class="field-label" style="font-size:9pt;color:#64748B;margin:12px 0 2px;">Signature</p><div class="sig-box"></div>
-    <p class="field-label" style="font-size:9pt;color:#64748B;margin:12px 0 2px;">Date</p><div class="field-line"></div>
-  </td>
+  ${sigBlock("Customer Authorisation", customer.company||"")}
+  <td style="border:none;width:4%;"></td>
+  ${sigBlock("Virtuos Digital — Authorisation", "Virtuos Digital")}
 </tr></table>
 
-<p style="margin-top:30px;font-size:9pt;color:#64748B;text-align:center;">Questions? Contact your Virtuos Digital representative · sales@virtuos.com · www.virtuos.com</p>
+<p style="margin-top:24pt;font-size:8.5pt;color:#94A3B8;text-align:center;border-top:1pt solid #E2E8F0;padding-top:8pt;">
+  Questions? Contact your Virtuos Digital representative &nbsp;·&nbsp; sales@virtuos.com &nbsp;·&nbsp; www.virtuos.com
+</p>
+
 </body></html>`;
 
-  const blob = new Blob([html],{type:"application/msword;charset=utf-8"});
+  const blob = new Blob(["﻿"+html], {type:"application/msword;charset=utf-8"});
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href=url; a.download=`Quote-${qd.quoteId}.doc`;
@@ -368,7 +468,7 @@ async function exportQuoteHTML({cl,annualList,discTotal,subUSD,subLocal,taxLocal
   const f$ = n => `$${n.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}`;
   const fC = (n,s) => `${s}${n.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}`;
   const fD = s => s ? new Date(s).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}) : "—";
-  const cycleLabel = billingCycle==="monthly" ? `Monthly (${monthCount} mo)` : billingCycle.charAt(0).toUpperCase()+billingCycle.slice(1);
+  const cycleLabel = billingCycle==="monthly" ? `Monthly (${monthCount} mo)` : billingCycle==="custom" ? "Custom Period" : billingCycle.charAt(0).toUpperCase()+billingCycle.slice(1);
   const days = daysBetween(startDate,endDate);
 
   await transparentLogoPromise; // ensure transparent version is ready
@@ -1797,9 +1897,9 @@ export default function QuoteBuilder({ user, onSignOut }) {
   const [taxConfig,    setTaxConfig]    = useState(TAX_RATES[0]);
   const [showPreview,  setShowPreview]  = useState(false);
 
-  const handleCycle  = c => { setBillingCycle(c); setEndDate(autoEndDate(startDate, c, monthCount)); };
-  const handleStart  = d => { setStartDate(d); setEndDate(autoEndDate(d, billingCycle, monthCount)); };
-  const handleMonths = n => { const m = Math.max(1, parseInt(n)||1); setMonthCount(m); setEndDate(autoEndDate(startDate, "monthly", m)); };
+  const handleCycle  = c => { setBillingCycle(c); if(c!=="custom") setEndDate(autoEndDate(startDate,c,monthCount)); };
+  const handleStart  = d => { setStartDate(d); if(billingCycle!=="custom") setEndDate(autoEndDate(d,billingCycle,monthCount)); };
+  const handleMonths = n => { const m=Math.max(0.5,parseFloat(n)||0.5); setMonthCount(m); setEndDate(autoEndDate(startDate,"monthly",m)); };
 
   function resetQuote() {
     setCustomer({ name: "", company: "", email: "", phone: "" });
@@ -1852,7 +1952,7 @@ export default function QuoteBuilder({ user, onSignOut }) {
   }, [lines, startDate, endDate, billingCycle, currency, taxConfig]);
 
   const days  = daysBetween(startDate, endDate);
-  const prPct = billingCycle !== "annual" ? `Pro-rata: ${(proRataFactor(startDate,endDate,billingCycle)*100).toFixed(1)}%` : null;
+  const prPct = billingCycle !== "annual" ? `Pro-rata: ${(proRataFactor(startDate,endDate,billingCycle)*100).toFixed(2)}%` : null;
 
   const handleNav = v => {
     if (v === "builder") { resetQuote(); }
@@ -1998,16 +2098,34 @@ export default function QuoteBuilder({ user, onSignOut }) {
 
                   <Panel title="Subscription Period" icon="📅">
                     <Sel label="Billing Cycle" value={billingCycle} onChange={handleCycle}
-                      options={[{value:"monthly",label:"Monthly (custom duration)"},{value:"quarterly",label:"Quarterly"},{value:"annual",label:"Annual"}]}/>
-                    {billingCycle === "monthly" && <Inp label="Number of Months" type="number" min="1" max="36" value={monthCount} onChange={handleMonths}/>}
+                      options={[
+                        {value:"annual",   label:"Annual (12 months)"},
+                        {value:"quarterly",label:"Quarterly (3 months)"},
+                        {value:"monthly",  label:"Monthly / Fractional"},
+                        {value:"custom",   label:"Custom — pick end date"},
+                      ]}/>
+                    {billingCycle==="monthly"&&(
+                      <div style={{display:"flex",flexDirection:"column",gap:"3px"}}>
+                        <Label>Duration (months — decimals OK, e.g. 6.5)</Label>
+                        <input type="number" min="0.5" step="0.5" value={monthCount}
+                          onChange={e=>handleMonths(e.target.value)}
+                          style={{...IS}}
+                          onFocus={e=>{e.target.style.borderColor=V.pink;e.target.select();}}
+                          onBlur={e=>e.target.style.borderColor=V.border}/>
+                      </div>
+                    )}
                     <Inp label="Start Date" type="date" value={startDate} onChange={handleStart}/>
-                    <div style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
-                      <Label>End Date (auto-calculated)</Label>
-                      <div style={{ background: "#F1F5F9", borderRadius: "8px", padding: "8px 11px", fontSize: "13.5px", color: V.ink, fontWeight: 600, border: `1px solid ${V.border}` }}>{endDate || "—"}</div>
-                    </div>
-                    {days > 0 && (
-                      <div style={{ background: "#EFF6FF", borderRadius: "8px", padding: "8px 11px", fontSize: "12px", color: "#1D4ED8", fontWeight: 600, border: "1px solid #BFDBFE" }}>
-                        📆 {days} days{billingCycle === "annual" && days >= 364 ? " · Full annual period" : ""}{prPct ? ` · ${prPct}` : ""}
+                    {billingCycle==="custom"?(
+                      <Inp label="End Date (set manually)" type="date" value={endDate} onChange={setEndDate}/>
+                    ):(
+                      <div style={{display:"flex",flexDirection:"column",gap:"3px"}}>
+                        <Label>End Date (auto-calculated)</Label>
+                        <div style={{background:"#F1F5F9",borderRadius:"8px",padding:"8px 11px",fontSize:"13.5px",color:V.ink,fontWeight:600,border:`1px solid ${V.border}`}}>{endDate||"—"}</div>
+                      </div>
+                    )}
+                    {days>0&&(
+                      <div style={{background:"#EFF6FF",borderRadius:"8px",padding:"8px 11px",fontSize:"12px",color:"#1D4ED8",fontWeight:600,border:"1px solid #BFDBFE"}}>
+                        📆 {days} days{billingCycle==="annual"&&days>=364?" · Full annual period":""}{prPct?` · ${prPct}`:""}
                       </div>
                     )}
                   </Panel>
