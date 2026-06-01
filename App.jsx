@@ -1884,6 +1884,7 @@ function QuoteHistory({ onNewQuote, onLoadQuote, user }) {
 export default function QuoteBuilder({ user, onSignOut }) {
   const today = new Date().toISOString().split("T")[0];
   const [view,         setView]         = useState("home");
+  const [dbReady,      setDbReady]      = useState(null); // null=checking, true=ok, false=missing
   const [customer,     setCustomer]     = useState({ name: "", company: "", email: "", phone: "" });
   const [accountId,    setAccountId]    = useState(null);
   const [paymentTerms, setPaymentTerms] = useState("100% Advance");
@@ -1896,6 +1897,11 @@ export default function QuoteBuilder({ user, onSignOut }) {
   const [endDate,      setEndDate]      = useState(autoEndDate(today, "annual", 12));
   const [taxConfig,    setTaxConfig]    = useState(TAX_RATES[0]);
   const [showPreview,  setShowPreview]  = useState(false);
+
+  useEffect(() => {
+    supabase.from("accounts").select("id").limit(1)
+      .then(({ error }) => setDbReady(!error || error.code !== "42P01"));
+  }, []);
 
   const handleCycle  = c => { setBillingCycle(c); if(c!=="custom") setEndDate(autoEndDate(startDate,c,monthCount)); };
   const handleStart  = d => { setStartDate(d); if(billingCycle!=="custom") setEndDate(autoEndDate(d,billingCycle,monthCount)); };
@@ -2033,7 +2039,22 @@ export default function QuoteBuilder({ user, onSignOut }) {
 
       <Sidebar view={view} setView={handleNav} user={user} onSignOut={onSignOut}/>
 
-      <main className="qb-content">
+      {dbReady === false && (
+        <div style={{ position:"fixed", top:0, left:0, right:0, zIndex:9999, background:"#FEF3C7", borderBottom:"2px solid #F59E0B", padding:"10px 20px", display:"flex", alignItems:"center", gap:"12px", flexWrap:"wrap" }}>
+          <span style={{ fontSize:"16px" }}>⚠️</span>
+          <span style={{ fontSize:"13px", fontWeight:600, color:"#92400E", flex:1 }}>
+            Database setup required — the Accounts &amp; Contacts tables are missing.
+            Run <code style={{ background:"rgba(0,0,0,0.08)", padding:"1px 5px", borderRadius:"4px", fontFamily:"monospace" }}>supabase_phase2_migration.sql</code> in your{" "}
+            <a href="https://supabase.com/dashboard/project/_/sql" target="_blank" rel="noreferrer" style={{ color:"#92400E", textDecoration:"underline" }}>Supabase SQL Editor</a> to fix this.
+          </span>
+          <button onClick={async () => { const { error } = await supabase.from("accounts").select("id").limit(1); setDbReady(!error || error.code !== "42P01"); }}
+            style={{ padding:"4px 12px", background:"#F59E0B", color:"#fff", border:"none", borderRadius:"6px", cursor:"pointer", fontSize:"12px", fontWeight:700, fontFamily:"inherit" }}>
+            Re-check
+          </button>
+        </div>
+      )}
+
+      <main className="qb-content" style={dbReady === false ? { paddingTop:"52px" } : undefined}>
         {view === "home" && (
           <HomeView user={user} onLoadQuote={loadQuote} onNewQuote={() => { resetQuote(); setView("builder"); }}/>
         )}
