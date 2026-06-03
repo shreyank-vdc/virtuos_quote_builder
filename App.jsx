@@ -1,6 +1,11 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { supabase } from "./supabase.js";
 import LOGO_SRC from "./logoData.js";
+import {
+  Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
+  WidthType, AlignmentType, BorderStyle, ShadingType,
+  ImageRun, convertInchesToTwip, VerticalAlign,
+} from "docx";
 
 // Strip white background from logo PNG using Canvas (runs once, cached)
 let _transparentLogo = null;
@@ -276,189 +281,269 @@ function ProductLine({line,onUpdate,onRemove,billingCycle,startDate,endDate}){
 
 // ─── HTML EXPORT ─────────────────────────────────────────────────────────────
 async function exportQuoteWord({cl,annualList,discTotal,subUSD,subLocal,taxLocal,grandLocal,customer,qd,currency,billingCycle,monthCount,startDate,endDate,taxConfig,paymentTerms,cats,sym}) {
-  await transparentLogoPromise;
   const f$ = n => `$${n.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}`;
   const fC = (n,s) => `${s}${n.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}`;
   const fD = s => s ? new Date(s).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}) : "—";
   const cycleLabel = billingCycle==="monthly"?`Monthly (${monthCount} mo)`:billingCycle==="custom"?"Custom Period":billingCycle.charAt(0).toUpperCase()+billingCycle.slice(1);
-
   const hasDiscount = cl.some(l=>l.disc>0);
-  const cols = hasDiscount ? 5 : 4;
 
-  // Column widths as percentages
-  const colW = hasDiscount
-    ? ["44%","8%","16%","14%","18%"]
-    : ["50%","9%","19%","22%"];
+  // ── helpers ──────────────────────────────────────────────────────────────
+  const NAVY = "0D1B3E", SLATE = "64748B", INK = "1E293B", BORDER_C = "CBD5E1";
+  const twip = n => convertInchesToTwip(n);
+  const cm = n => Math.round(n * 567); // 1 cm ≈ 567 twips
 
-  const tableRows = cl.map(l=>{
+  const run = (text, opts={}) => new TextRun({
+    text: String(text), font: "Calibri", size: (opts.size||11)*2,
+    bold: opts.bold||false, italics: opts.italics||false,
+    color: opts.color||INK, break: opts.break||0,
+  });
+
+  const para = (children, opts={}) => new Paragraph({
+    children: Array.isArray(children) ? children : [children],
+    alignment: opts.align || AlignmentType.LEFT,
+    spacing: { before: (opts.spaceBefore||0)*20, after: (opts.spaceAfter||6)*20 },
+    ...(opts.heading ? { heading: opts.heading } : {}),
+  });
+
+  const cell = (children, opts={}) => new TableCell({
+    children: Array.isArray(children) ? children : [children],
+    columnSpan: opts.span||1,
+    width: opts.width ? { size: opts.width, type: WidthType.DXA } : undefined,
+    shading: opts.bg ? { fill: opts.bg, type: ShadingType.CLEAR } : undefined,
+    borders: opts.noBorder ? {
+      top:{style:BorderStyle.NONE,size:0},bottom:{style:BorderStyle.NONE,size:0},
+      left:{style:BorderStyle.NONE,size:0},right:{style:BorderStyle.NONE,size:0},
+    } : {
+      top:{style:BorderStyle.SINGLE,size:4,color:BORDER_C},
+      bottom:{style:BorderStyle.SINGLE,size:4,color:BORDER_C},
+      left:{style:BorderStyle.SINGLE,size:4,color:BORDER_C},
+      right:{style:BorderStyle.SINGLE,size:4,color:BORDER_C},
+    },
+    verticalAlign: opts.vAlign || VerticalAlign.TOP,
+    margins: { top:cm(0.1), bottom:cm(0.1), left:cm(0.18), right:cm(0.18) },
+  });
+
+  // Page width (A4) in twips minus margins → usable = 11906 - 2×1134 = 9638
+  const PAGE_W = 9638;
+
+  // ── logo (base64 PNG) ────────────────────────────────────────────────────
+  let logoRun = null;
+  try {
+    const b64 = LOGO_SRC.split(",")[1];
+    const binary = atob(b64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i=0;i<binary.length;i++) bytes[i]=binary.charCodeAt(i);
+    logoRun = new ImageRun({
+      data: bytes.buffer,
+      transformation: { width: 120, height: 32 },
+      type: "png",
+    });
+  } catch(_) { logoRun = null; }
+
+  // ── header row (logo left, quote ID right) ────────────────────────────────
+  const headerTable = new Table({
+    width: { size: PAGE_W, type: WidthType.DXA },
+    borders: { top:{style:BorderStyle.NONE},bottom:{style:BorderStyle.NONE},left:{style:BorderStyle.NONE},right:{style:BorderStyle.NONE},insideH:{style:BorderStyle.NONE},insideV:{style:BorderStyle.NONE} },
+    rows: [new TableRow({ children: [
+      cell([
+        para(logoRun ? [logoRun] : [run("Virtuos Digital",{bold:true,size:14})], {spaceAfter:2}),
+        para([run("Sales Quotation",{bold:true,size:18,color:NAVY})], {spaceAfter:0}),
+        para([run(qd.quoteId,{size:9,color:SLATE})], {spaceAfter:0}),
+      ], {noBorder:true, width:Math.round(PAGE_W*0.58)}),
+      cell([
+        ...[
+          ["Quote Name",    qd.quoteName||"—"],
+          ["Prepared By",   qd.owner||"—"],
+          ["Issue Date",    qd.createdOn||"—"],
+          ["Valid Until",   qd.validUntil?fD(qd.validUntil):"30 days"],
+          ["Period",        `${fD(startDate)} → ${fD(endDate)}`],
+          ["Billing",       cycleLabel],
+          ["Payment",       paymentTerms],
+        ].map(([k,v]) => para([
+          run(k+":  ",{size:9,color:SLATE}),
+          run(v,{size:9,bold:true}),
+        ], {spaceAfter:2})),
+      ], {noBorder:true, width:Math.round(PAGE_W*0.42)}),
+    ]})],
+  });
+
+  // ── bill-to box ───────────────────────────────────────────────────────────
+  const billToTable = new Table({
+    width: { size: PAGE_W, type: WidthType.DXA },
+    borders: { top:{style:BorderStyle.NONE},bottom:{style:BorderStyle.NONE},left:{style:BorderStyle.NONE},right:{style:BorderStyle.NONE},insideH:{style:BorderStyle.NONE},insideV:{style:BorderStyle.NONE} },
+    rows: [new TableRow({ children: [
+      cell([
+        para([run("PREPARED FOR",{size:8,color:SLATE,bold:true})], {spaceAfter:2}),
+        para([run(customer.company||"—",{bold:true,size:13,color:NAVY})], {spaceAfter:2}),
+        para([run([customer.name,customer.email,customer.phone].filter(Boolean).join("  ·  "),{size:10,color:SLATE})], {spaceAfter:0}),
+      ], {bg:"F8FAFC", noBorder:false, width:PAGE_W}),
+    ]})],
+  });
+
+  // ── products table header ─────────────────────────────────────────────────
+  const colWidths = hasDiscount
+    ? [Math.round(PAGE_W*0.44),Math.round(PAGE_W*0.08),Math.round(PAGE_W*0.16),Math.round(PAGE_W*0.14),Math.round(PAGE_W*0.18)]
+    : [Math.round(PAGE_W*0.50),Math.round(PAGE_W*0.09),Math.round(PAGE_W*0.19),Math.round(PAGE_W*0.22)];
+
+  const thCell = (text, align=AlignmentType.LEFT, w) => new TableCell({
+    children: [new Paragraph({ children:[run(text,{bold:true,size:9.5,color:"FFFFFF"})], alignment:align, spacing:{before:100,after:100} })],
+    width: { size:w, type:WidthType.DXA },
+    shading: { fill:NAVY, type:ShadingType.CLEAR },
+    borders: {
+      top:{style:BorderStyle.SINGLE,size:4,color:NAVY},
+      bottom:{style:BorderStyle.SINGLE,size:4,color:NAVY},
+      left:{style:BorderStyle.SINGLE,size:4,color:NAVY},
+      right:{style:BorderStyle.SINGLE,size:4,color:NAVY},
+    },
+    margins:{top:cm(0.1),bottom:cm(0.1),left:cm(0.18),right:cm(0.18)},
+  });
+
+  const theadRow = new TableRow({ children: [
+    thCell("Product / Service", AlignmentType.LEFT, colWidths[0]),
+    thCell("Qty", AlignmentType.CENTER, colWidths[1]),
+    thCell("Unit Price", AlignmentType.RIGHT, colWidths[2]),
+    ...(hasDiscount ? [thCell("Discount", AlignmentType.RIGHT, colWidths[3])] : []),
+    thCell("Net (USD)", AlignmentType.RIGHT, colWidths[hasDiscount?4:3]),
+  ]});
+
+  const dataRows = cl.map(l => {
     const isPro = l.productCategory==="professional_services";
     const unitLabel = isPro ? `${f$(l.ratePerHour||0)}/hr` : f$(l.item?.unitPrice||0);
     const qtyLabel  = isPro ? `${l.qty} hrs` : `${l.qty}`;
-    return `
-    <tr>
-      <td style="border:1px solid #CBD5E1;padding:7pt 9pt;font-size:10pt;">
-        <b>${l.item?.name||""}</b>
-        ${l.item?.description?`<br/><span style="font-size:8.5pt;color:#64748B;">${l.item.description}</span>`:""}
-      </td>
-      <td style="border:1px solid #CBD5E1;padding:7pt 9pt;text-align:center;font-size:10pt;">${qtyLabel}</td>
-      <td style="border:1px solid #CBD5E1;padding:7pt 9pt;text-align:right;font-size:10pt;">${unitLabel}</td>
-      ${hasDiscount?`<td style="border:1px solid #CBD5E1;padding:7pt 9pt;text-align:right;font-size:10pt;color:#DC2626;">${l.disc>0?`-${f$(l.disc)}`:"—"}</td>`:""}
-      <td style="border:1px solid #CBD5E1;padding:7pt 9pt;text-align:right;font-size:10pt;font-weight:bold;">${f$(l.net)}</td>
-    </tr>`;
-  }).join("");
+    return new TableRow({ children: [
+      cell([para([
+        run(l.item?.name||"",{bold:true,size:10}),
+        ...(l.item?.description ? [run("\n"+l.item.description,{size:8.5,color:SLATE})] : []),
+      ])], {width:colWidths[0]}),
+      cell([para([run(qtyLabel,{size:10})],{align:AlignmentType.CENTER})], {width:colWidths[1]}),
+      cell([para([run(unitLabel,{size:10})],{align:AlignmentType.RIGHT})], {width:colWidths[2]}),
+      ...(hasDiscount ? [cell([para([run(l.disc>0?`-${f$(l.disc)}`:"—",{size:10,color:l.disc>0?"DC2626":SLATE})],{align:AlignmentType.RIGHT})], {width:colWidths[3]})] : []),
+      cell([para([run(f$(l.net),{bold:true,size:10})],{align:AlignmentType.RIGHT})], {width:colWidths[hasDiscount?4:3]}),
+    ]});
+  });
 
-  const tcBlocks = cats.map(cat=>`
-    <p style="margin:6pt 0 2pt;font-size:10pt;font-weight:bold;color:#0D1B3E;">${PRODUCTS[cat].label}</p>
-    <p style="margin:0 0 10pt;font-size:9pt;color:#475569;line-height:1.5;">${PRODUCTS[cat].tc}</p>`).join("");
+  const subtotalRow = (label, value, bg="F8FAFC") => {
+    const cols = hasDiscount ? 5 : 4;
+    return new TableRow({ children: [
+      new TableCell({
+        children:[new Paragraph({children:[run(label,{size:10,bold:true})],alignment:AlignmentType.RIGHT,spacing:{before:80,after:80}})],
+        columnSpan:cols-1,
+        shading:{fill:bg,type:ShadingType.CLEAR},
+        borders:{top:{style:BorderStyle.SINGLE,size:4,color:BORDER_C},bottom:{style:BorderStyle.SINGLE,size:4,color:BORDER_C},left:{style:BorderStyle.SINGLE,size:4,color:BORDER_C},right:{style:BorderStyle.SINGLE,size:4,color:BORDER_C}},
+        margins:{top:cm(0.08),bottom:cm(0.08),left:cm(0.18),right:cm(0.18)},
+      }),
+      new TableCell({
+        children:[new Paragraph({children:[run(value,{size:10,bold:true})],alignment:AlignmentType.RIGHT,spacing:{before:80,after:80}})],
+        shading:{fill:bg,type:ShadingType.CLEAR},
+        borders:{top:{style:BorderStyle.SINGLE,size:4,color:BORDER_C},bottom:{style:BorderStyle.SINGLE,size:4,color:BORDER_C},left:{style:BorderStyle.SINGLE,size:4,color:BORDER_C},right:{style:BorderStyle.SINGLE,size:4,color:BORDER_C}},
+        margins:{top:cm(0.08),bottom:cm(0.08),left:cm(0.18),right:cm(0.18)},
+      }),
+    ]});
+  };
 
-  const metaRows = [
-    ["Quote Name",    qd.quoteName||"—"],
-    ["Prepared By",   qd.owner||"—"],
-    ["Issue Date",    qd.createdOn||"—"],
-    ["Valid Until",   qd.validUntil?fD(qd.validUntil):"30 days"],
-    ["Period",        `${fD(startDate)} → ${fD(endDate)}`],
-    ["Billing",       cycleLabel],
-    ["Payment Terms", paymentTerms],
-  ].map(([k,v])=>`
-    <tr>
-      <td style="border:none;padding:2pt 12pt 2pt 0;font-size:9pt;color:#64748B;white-space:nowrap;vertical-align:top;">${k}</td>
-      <td style="border:none;padding:2pt 0;font-size:9pt;font-weight:600;color:#0F172A;vertical-align:top;">${v}</td>
-    </tr>`).join("");
+  const totalCols = hasDiscount ? 5 : 4;
+  const grandTotalRow = new TableRow({ children: [
+    new TableCell({
+      children:[new Paragraph({children:[run(`TOTAL (${currency.code})`,{size:12,bold:true,color:"FFFFFF"})],alignment:AlignmentType.RIGHT,spacing:{before:100,after:100}})],
+      columnSpan:totalCols-1,
+      shading:{fill:NAVY,type:ShadingType.CLEAR},
+      borders:{top:{style:BorderStyle.SINGLE,size:4,color:NAVY},bottom:{style:BorderStyle.SINGLE,size:4,color:NAVY},left:{style:BorderStyle.SINGLE,size:4,color:NAVY},right:{style:BorderStyle.SINGLE,size:4,color:NAVY}},
+      margins:{top:cm(0.1),bottom:cm(0.1),left:cm(0.18),right:cm(0.18)},
+    }),
+    new TableCell({
+      children:[new Paragraph({children:[run(fC(grandLocal,sym),{size:13,bold:true,color:"FFFFFF"})],alignment:AlignmentType.RIGHT,spacing:{before:100,after:100}})],
+      shading:{fill:NAVY,type:ShadingType.CLEAR},
+      borders:{top:{style:BorderStyle.SINGLE,size:4,color:NAVY},bottom:{style:BorderStyle.SINGLE,size:4,color:NAVY},left:{style:BorderStyle.SINGLE,size:4,color:NAVY},right:{style:BorderStyle.SINGLE,size:4,color:NAVY}},
+      margins:{top:cm(0.1),bottom:cm(0.1),left:cm(0.18),right:cm(0.18)},
+    }),
+  ]});
 
-  const sigBlock = (title, company) => `
-    <td style="border:none;width:48%;vertical-align:top;padding:0 12pt 0 0;">
-      <p style="margin:0 0 10pt;font-size:10pt;font-weight:bold;color:#0D1B3E;">${title}</p>
-      ${[["Authorised Signatory Name",""],["Title / Designation",""],["Company Name",company],["Date",""]].map(([lbl,val])=>`
-        <p style="margin:12pt 0 2pt;font-size:8.5pt;color:#64748B;">${lbl}</p>
-        <p style="margin:0;border-bottom:1pt solid #94A3B8;min-height:16pt;font-size:10pt;">${val}</p>`).join("")}
-      <p style="margin:12pt 0 2pt;font-size:8.5pt;color:#64748B;">Signature</p>
-      <p style="margin:0;border:1pt solid #94A3B8;height:50pt;"></p>
-    </td>`;
+  const productsTable = new Table({
+    width:{size:PAGE_W,type:WidthType.DXA},
+    rows:[
+      theadRow,
+      ...dataRows,
+      subtotalRow("Sub-Total (USD)", f$(subUSD)),
+      ...(currency.code!=="USD"?[subtotalRow(`Sub-Total (${currency.code}) @ ${currency.rate.toFixed(4)}`,fC(subLocal,sym))]:[]),
+      ...(taxConfig.rate>0?[subtotalRow(`${taxConfig.label} (${taxConfig.rate}%)`,fC(taxLocal,sym))]:[]),
+      grandTotalRow,
+    ],
+  });
 
-  const html = `<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<html xmlns:o="urn:schemas-microsoft-com:office:office"
-      xmlns:w="urn:schemas-microsoft-com:office:word"
-      xmlns="http://www.w3.org/TR/REC-html40">
-<head>
-<meta charset="utf-8"/>
-<meta name="ProgId" content="Word.Document"/>
-<!--[if gte mso 9]><xml>
-<w:WordDocument>
-  <w:View>Print</w:View>
-  <w:Zoom>90</w:Zoom>
-  <w:DoNotOptimizeForBrowser/>
-</w:WordDocument>
-</xml><![endif]-->
-<title>Quote ${qd.quoteId}</title>
-<style>
-  @page {
-    size:A4; margin:2cm 2cm 2.5cm 2cm;
-    mso-header-margin:1cm; mso-footer-margin:1cm;
-  }
-  body {
-    font-family:Calibri,Arial,sans-serif;font-size:11pt;
-    color:#1E293B;margin:0;padding:0;
-    mso-margin-top-alt:auto;mso-margin-bottom-alt:auto;
-  }
-  p  { margin:0 0 6pt; line-height:1.4; }
-  h1 { font-size:18pt;font-weight:700;color:#0D1B3E;margin:0 0 4pt;border:none; }
-  h2 { font-size:12pt;font-weight:700;color:#0D1B3E;margin:16pt 0 6pt;
-       border-bottom:1.5pt solid #E2E8F0;padding-bottom:3pt; }
-  table { border-collapse:collapse;width:100%;mso-table-lspace:0pt;mso-table-rspace:0pt; }
-  td,th { font-family:Calibri,Arial,sans-serif; }
-  th { background:#0D1B3E;color:#fff;font-size:9.5pt;font-weight:700;
-       padding:7pt 9pt;text-align:left;border:1pt solid #0D1B3E; }
-  .total-row td { background:#0D1B3E;color:#fff;font-size:12pt;font-weight:700;padding:8pt 9pt; }
-  .subtotal-row td { background:#F8FAFC;font-weight:600;font-size:10pt;padding:6pt 9pt;border:1pt solid #CBD5E1; }
-</style>
-</head>
-<body>
+  // ── signature table ───────────────────────────────────────────────────────
+  const sigFields = ["Authorised Signatory Name","Title / Designation","Company Name","Date","Signature"];
+  const sigBlock = (title, company) => [
+    para([run(title,{bold:true,size:11,color:NAVY})], {spaceAfter:4}),
+    ...sigFields.map(lbl => new Paragraph({
+      children:[run(lbl,{size:8.5,color:SLATE})],
+      spacing:{before:180,after:40},
+    })),
+    para([run(lbl==="Signature"?"":"",{size:10})]),
+  ];
+  const sigTable = new Table({
+    width:{size:PAGE_W,type:WidthType.DXA},
+    borders:{top:{style:BorderStyle.NONE},bottom:{style:BorderStyle.NONE},left:{style:BorderStyle.NONE},right:{style:BorderStyle.NONE},insideH:{style:BorderStyle.NONE},insideV:{style:BorderStyle.NONE}},
+    rows:[new TableRow({children:[
+      cell(sigFields.reduce((acc,lbl,i)=>{
+        acc.push(para([run(lbl,{size:8.5,color:SLATE})],{spaceAfter:2}));
+        acc.push(para([run(lbl==="Company Name"?(customer.company||""):lbl==="Signature"?" ":" ",{size:10})],{spaceAfter:8}));
+        return acc;
+      },[para([run("Customer Authorisation",{bold:true,size:11,color:NAVY})],{spaceAfter:6})]),
+      {noBorder:true,width:Math.round(PAGE_W*0.47)}),
+      cell([para([run("",{size:9})],{})],{noBorder:true,width:Math.round(PAGE_W*0.06)}),
+      cell(sigFields.reduce((acc,lbl)=>{
+        acc.push(para([run(lbl,{size:8.5,color:SLATE})],{spaceAfter:2}));
+        acc.push(para([run(lbl==="Company Name"?"Virtuos Digital":lbl==="Signature"?" ":" ",{size:10})],{spaceAfter:8}));
+        return acc;
+      },[para([run("Virtuos Digital — Authorisation",{bold:true,size:11,color:NAVY})],{spaceAfter:6})]),
+      {noBorder:true,width:Math.round(PAGE_W*0.47)}),
+    ]})],
+  });
 
-<!-- Logo + title -->
-<table style="border:none;width:100%;margin-bottom:14pt;">
-  <tr>
-    <td style="border:none;vertical-align:middle;width:60%;">
-      <p style="margin:0;">${LOGO_HTML(36)}</p>
-      <h1 style="margin-top:8pt;">Sales Quotation</h1>
-      <p style="margin:0;font-size:10pt;color:#64748B;font-family:Courier New,monospace;">${qd.quoteId}</p>
-    </td>
-    <td style="border:none;vertical-align:top;width:40%;text-align:right;">
-      <table style="border:none;width:auto;margin-left:auto;">${metaRows}</table>
-    </td>
-  </tr>
-</table>
+  // ── T&C paragraphs ────────────────────────────────────────────────────────
+  const tcParas = cats.flatMap(cat=>[
+    para([run(PRODUCTS[cat].label,{bold:true,size:10,color:NAVY})],{spaceBefore:8,spaceAfter:2}),
+    para([run(PRODUCTS[cat].tc,{size:9,color:SLATE})],{spaceAfter:4}),
+  ]);
 
-<!-- Bill to -->
-<table style="border:none;width:100%;margin-bottom:14pt;background:#F8FAFC;border-left:3pt solid #0D1B3E;">
-  <tr>
-    <td style="border:none;padding:10pt 14pt;">
-      <p style="margin:0 0 4pt;font-size:8.5pt;font-weight:700;color:#64748B;text-transform:uppercase;letter-spacing:0.08em;">Prepared For</p>
-      <p style="margin:0;font-size:12pt;font-weight:700;color:#0D1B3E;">${customer.company||"—"}</p>
-      <p style="margin:2pt 0 0;font-size:10pt;color:#475569;">${customer.name||""}${customer.email?" · "+customer.email:""}${customer.phone?" · "+customer.phone:""}</p>
-    </td>
-  </tr>
-</table>
+  // ── assemble doc ──────────────────────────────────────────────────────────
+  const sectionChildren = [
+    headerTable,
+    para([run(""),],{spaceBefore:4,spaceAfter:4}),
+    billToTable,
+    para([run("Products & Services",{bold:true,size:13,color:NAVY})],{spaceBefore:12,spaceAfter:4}),
+    productsTable,
+    para([run("Terms & Conditions",{bold:true,size:13,color:NAVY})],{spaceBefore:12,spaceAfter:4}),
+    ...tcParas,
+    ...(qd.notes?[
+      para([run("Notes",{bold:true,size:13,color:NAVY})],{spaceBefore:12,spaceAfter:4}),
+      para([run(qd.notes,{size:10})]),
+    ]:[]),
+    para([run("Acceptance & Authorisation",{bold:true,size:13,color:NAVY})],{spaceBefore:12,spaceAfter:4}),
+    para([run(`By signing below, both parties agree to the terms and pricing in quotation ${qd.quoteId}. Payment Terms: ${paymentTerms}. Subscription period: ${fD(startDate)} to ${fD(endDate)}.`,{size:9.5,color:SLATE})],{spaceAfter:8}),
+    sigTable,
+    para([run("Questions? Contact your Virtuos Digital representative  ·  sales@virtuos.com  ·  www.virtuos.com",{size:8,color:"94A3B8"})],{spaceBefore:12,align:AlignmentType.CENTER}),
+  ];
 
-<!-- Products table -->
-<h2>Products &amp; Services</h2>
-<table style="margin-bottom:0;">
-  <colgroup>${colW.map(w=>`<col style="width:${w};"/>`).join("")}</colgroup>
-  <thead><tr>
-    <th>Product / Service</th>
-    <th style="text-align:center;">Qty</th>
-    <th style="text-align:right;">Unit Price</th>
-    ${hasDiscount?`<th style="text-align:right;">Discount</th>`:""}
-    <th style="text-align:right;">Net (USD)</th>
-  </tr></thead>
-  <tbody>${tableRows}</tbody>
-  <tfoot>
-    <tr class="subtotal-row">
-      <td colspan="${cols-1}" style="text-align:right;border:1pt solid #CBD5E1;">Sub-Total (USD)</td>
-      <td style="text-align:right;border:1pt solid #CBD5E1;">${f$(subUSD)}</td>
-    </tr>
-    ${currency.code!=="USD"?`<tr class="subtotal-row">
-      <td colspan="${cols-1}" style="text-align:right;border:1pt solid #CBD5E1;">Sub-Total (${currency.code}) @ ${currency.rate.toFixed(4)}</td>
-      <td style="text-align:right;border:1pt solid #CBD5E1;">${fC(subLocal,sym)}</td>
-    </tr>`:""}
-    ${taxConfig.rate>0?`<tr class="subtotal-row">
-      <td colspan="${cols-1}" style="text-align:right;border:1pt solid #CBD5E1;">${taxConfig.label} (${taxConfig.rate}%)</td>
-      <td style="text-align:right;border:1pt solid #CBD5E1;">${fC(taxLocal,sym)}</td>
-    </tr>`:""}
-    <tr class="total-row">
-      <td colspan="${cols-1}" style="text-align:right;border:1pt solid #0D1B3E;">TOTAL (${currency.code})</td>
-      <td style="text-align:right;font-size:14pt;border:1pt solid #0D1B3E;">${fC(grandLocal,sym)}</td>
-    </tr>
-  </tfoot>
-</table>
+  const doc = new Document({
+    creator: "Virtuos Digital Quote Builder",
+    title: `Quote ${qd.quoteId}`,
+    sections:[{
+      properties:{
+        page:{
+          size:{ width:cm(21), height:cm(29.7) },
+          margin:{ top:cm(2),bottom:cm(2.5),left:cm(2),right:cm(2) },
+        },
+      },
+      children: sectionChildren,
+    }],
+  });
 
-<!-- T&C -->
-<h2>Terms &amp; Conditions</h2>
-${tcBlocks}
-${qd.notes?`<h2>Notes</h2><p style="font-size:10pt;">${qd.notes}</p>`:""}
-
-<!-- Signatures -->
-<h2>Acceptance &amp; Authorisation</h2>
-<p style="font-size:9.5pt;color:#475569;margin-bottom:14pt;">
-  By signing below, both parties agree to the terms and pricing in quotation <b>${qd.quoteId}</b>.
-  Payment Terms: <b>${paymentTerms}</b>. Subscription period: <b>${fD(startDate)}</b> to <b>${fD(endDate)}</b>.
-</p>
-<table style="border:none;"><tr>
-  ${sigBlock("Customer Authorisation", customer.company||"")}
-  <td style="border:none;width:4%;"></td>
-  ${sigBlock("Virtuos Digital — Authorisation", "Virtuos Digital")}
-</tr></table>
-
-<p style="margin-top:24pt;font-size:8.5pt;color:#94A3B8;text-align:center;border-top:1pt solid #E2E8F0;padding-top:8pt;">
-  Questions? Contact your Virtuos Digital representative &nbsp;·&nbsp; sales@virtuos.com &nbsp;·&nbsp; www.virtuos.com
-</p>
-
-</body></html>`;
-
-  const blob = new Blob(["﻿"+html], {type:"application/msword;charset=utf-8"});
+  const buffer = await Packer.toBuffer(doc);
+  const blob = new Blob([buffer], {type:"application/vnd.openxmlformats-officedocument.wordprocessingml.document"});
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
-  a.href=url; a.download=`Quote-${qd.quoteId}.doc`;
+  a.href=url; a.download=`Quote-${qd.quoteId}.docx`;
   document.body.appendChild(a); a.click();
   document.body.removeChild(a);
   setTimeout(()=>URL.revokeObjectURL(url),10000);
