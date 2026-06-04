@@ -472,19 +472,11 @@ async function exportQuoteWord({cl,annualList,discTotal,subUSD,subLocal,taxLocal
 
   // ── signature table ───────────────────────────────────────────────────────
   const sigFields = ["Authorised Signatory Name","Title / Designation","Company Name","Date","Signature"];
-  const sigBlock = (title, company) => [
-    para([run(title,{bold:true,size:11,color:NAVY})], {spaceAfter:4}),
-    ...sigFields.map(lbl => new Paragraph({
-      children:[run(lbl,{size:8.5,color:SLATE})],
-      spacing:{before:180,after:40},
-    })),
-    para([run(lbl==="Signature"?"":"",{size:10})]),
-  ];
   const sigTable = new Table({
     width:{size:PAGE_W,type:WidthType.DXA},
     borders:{top:{style:BorderStyle.NONE},bottom:{style:BorderStyle.NONE},left:{style:BorderStyle.NONE},right:{style:BorderStyle.NONE},insideH:{style:BorderStyle.NONE},insideV:{style:BorderStyle.NONE}},
     rows:[new TableRow({children:[
-      cell(sigFields.reduce((acc,lbl,i)=>{
+      cell(sigFields.reduce((acc,lbl)=>{
         acc.push(para([run(lbl,{size:8.5,color:SLATE})],{spaceAfter:2}));
         acc.push(para([run(lbl==="Company Name"?(customer.company||""):lbl==="Signature"?" ":" ",{size:10})],{spaceAfter:8}));
         return acc;
@@ -539,8 +531,7 @@ async function exportQuoteWord({cl,annualList,discTotal,subUSD,subLocal,taxLocal
     }],
   });
 
-  const buffer = await Packer.toBuffer(doc);
-  const blob = new Blob([buffer], {type:"application/vnd.openxmlformats-officedocument.wordprocessingml.document"});
+  const blob = await Packer.toBlob(doc);
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href=url; a.download=`Quote-${qd.quoteId}.docx`;
