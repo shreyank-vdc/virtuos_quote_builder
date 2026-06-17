@@ -70,7 +70,7 @@ const PRODUCTS = {
       { id: "ss-standard-support", name: "Standard Support Package", unitPrice: 6.00,   description: "$6.00/user/yr" },
       { id: "ss-premium-support",  name: "Premium Support Package",  unitPrice: 6.00,   description: "$6.00/user/yr" },
       { id: "ss-advance",          name: "Smartsheet Advance (AWM)", unitPrice: 144.00, description: "$12.00/user/mo × 12" },
-      { id: "ss-dynamic-view",     name: "Dynamic View",             unitPrice: 48.00,  description: "$4.00/user/mo × 12" },
+      { id: "ss-dynamic-view",     name: "Dynamic View",             unitPrice: 1500.00, description: "$1,500.00/unit/yr" },
     ],
     tc: `For all payments in INR, USD to INR exchange rates shall be applicable 'as on date' at the time of payment by customer. This order is non-cancellable & non-refundable. The Customer acknowledges that they are bound by the Smartsheet Subscriber Agreement for all matters related to licensing, security, privacy, and use of the software available at https://www.smartsheet.com/legal/user-agreement. *Government Taxes Are Extra.`
   },
@@ -240,7 +240,7 @@ function ProductLine({line,onUpdate,onRemove,billingCycle,startDate,endDate}){
           <>
             <Sel label="Product / Service" value={line.itemId} onChange={v=>onUpdate({...line,itemId:v})}
               options={all.map(i=>({value:i.id,label:i.name}))}/>
-            <Inp label="Seats" type="number" min="1"
+            <Inp label="Qty" type="number" min="1"
               value={line.qty} onChange={v=>onUpdate({...line,qty:Math.max(1,parseInt(v)||1)})} onFocusSelect/>
           </>
         )}
@@ -696,7 +696,7 @@ async function exportQuoteHTML({cl,annualList,discTotal,subUSD,subLocal,taxLocal
       <thead>
         <tr style="background:#0D1B3E;">
           <th style="padding:9px 13px;text-align:left;font-weight:700;color:#fff;font-size:10px;text-transform:uppercase;letter-spacing:0.06em;">Product / Description</th>
-          <th style="padding:9px 13px;text-align:right;font-weight:700;color:#fff;font-size:10px;text-transform:uppercase;letter-spacing:0.06em;">Seats</th>
+          <th style="padding:9px 13px;text-align:right;font-weight:700;color:#fff;font-size:10px;text-transform:uppercase;letter-spacing:0.06em;">Qty</th>
           <th style="padding:9px 13px;text-align:right;font-weight:700;color:#fff;font-size:10px;text-transform:uppercase;letter-spacing:0.06em;">Unit Price (USD/yr)</th>
           ${hasDiscount?`<th style="padding:9px 13px;text-align:right;font-weight:700;color:#fff;font-size:10px;text-transform:uppercase;letter-spacing:0.06em;">Discount</th>`:""}
           <th style="padding:9px 13px;text-align:right;font-weight:700;color:#fff;font-size:10px;text-transform:uppercase;letter-spacing:0.06em;">Net Amount (USD)</th>
@@ -779,7 +779,7 @@ async function exportQuoteHTML({cl,annualList,discTotal,subUSD,subLocal,taxLocal
       <table>
         <thead><tr style="background:#0D1B3E;">
           <th style="padding:9px 16px;text-align:left;font-size:10px;font-weight:700;color:rgba(255,255,255,0.6);text-transform:uppercase;letter-spacing:0.07em;">Product</th>
-          <th style="padding:9px 16px;text-align:right;font-size:10px;font-weight:700;color:rgba(255,255,255,0.6);text-transform:uppercase;letter-spacing:0.07em;">Seats</th>
+          <th style="padding:9px 16px;text-align:right;font-size:10px;font-weight:700;color:rgba(255,255,255,0.6);text-transform:uppercase;letter-spacing:0.07em;">Qty</th>
           <th style="padding:9px 16px;text-align:right;font-size:10px;font-weight:700;color:rgba(255,255,255,0.6);text-transform:uppercase;letter-spacing:0.07em;">Net (USD)</th>
         </tr></thead>
         <tbody>${summaryRows}</tbody>
@@ -950,7 +950,7 @@ function QuotePreview({data,onClose}){
           <div style={{overflowX:"auto",marginBottom:"24px",borderRadius:"10px",border:"1px solid #E2E8F0"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:"clamp(10px,1.5vw,12.5px)",minWidth:"480px"}}>
             <thead>
               <tr style={{background:"#0D1B3E"}}>
-                {["Product / Description","Seats","Unit Price (USD/yr)","Discount","Net Amount (USD)"].map((h,i)=>(
+                {["Product / Description","Qty","Unit Price (USD/yr)","Discount","Net Amount (USD)"].map((h,i)=>(
                   <th key={h} style={{padding:"10px 13px",textAlign:i===0?"left":"right",fontWeight:700,color:"#fff",fontSize:"10px",textTransform:"uppercase",letterSpacing:"0.06em",whiteSpace:"nowrap"}} className={h==="Unit Price (USD/yr)"?"qp-table-hide":""}>
                     {h}
                   </th>
@@ -1093,7 +1093,7 @@ function QuotePreview({data,onClose}){
           {/* Compact summary table for page 2 */}
           <div style={{background:"#F8FAFC",borderRadius:"10px",border:"1px solid #E2E8F0",overflow:"auto",marginBottom:"24px"}}>
             <div style={{background:"#0D1B3E",padding:"10px 16px",display:"grid",gridTemplateColumns:"2fr 1fr 1fr",gap:"8px",minWidth:0}}>
-              {["Product","Seats","Net (USD)"].map(h=>(
+              {["Product","Qty","Net (USD)"].map(h=>(
                 <div key={h} style={{fontSize:"10px",fontWeight:700,color:"rgba(255,255,255,0.6)",textTransform:"uppercase",letterSpacing:"0.07em",textAlign:h==="Product"?"left":"right"}}>{h}</div>
               ))}
             </div>
