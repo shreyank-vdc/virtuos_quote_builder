@@ -1646,14 +1646,192 @@ function AccountsView({ onLoadQuote, user }) {
 }
 
 // ─── SIDEBAR NAV ─────────────────────────────────────────────────────────────
-const NAV_ITEMS = [
-  { id: "home",     label: "Home",       icon: "⌂" },
-  { id: "builder",  label: "New Quote",  icon: "✦" },
-  { id: "accounts", label: "Accounts",   icon: "◈" },
-  { id: "history",  label: "All Quotes", icon: "≡" },
-];
+// ─── USER PROFILE / ROLES ─────────────────────────────────────────────────────
+async function fetchUserProfile(userId) {
+  const { data } = await supabase.from("user_profiles").select("*").eq("id", userId).single();
+  return data;
+}
+async function fetchAllProfiles() {
+  const { data } = await supabase.from("user_profiles").select("*").order("full_name");
+  return data || [];
+}
+async function updateProfileRole(profileId, role) {
+  return supabase.from("user_profiles").update({ role, updated_at: new Date().toISOString() }).eq("id", profileId);
+}
+async function updateProfileManager(profileId, managerId) {
+  return supabase.from("user_profiles").update({ manager_id: managerId || null, updated_at: new Date().toISOString() }).eq("id", profileId);
+}
 
-function Sidebar({ view, setView, user, onSignOut }) {
+const ROLE_LABELS = { admin: "Admin", hr_admin: "HR-Admin", manager: "Manager", contributor: "Contributor" };
+const ROLE_COLORS = { admin: "#7C3AED", hr_admin: "#0EA5E9", manager: "#10B981", contributor: "#94A3B8" };
+const ALL_ROLES   = ["admin", "hr_admin", "manager", "contributor"];
+
+// ─── USERS VIEW (Admin / HR-Admin only) ───────────────────────────────────────
+function UsersView({ currentUser, userProfile }) {
+  const [profiles, setProfiles] = useState([]);
+  const [loading,  setLoading]  = useState(true);
+  const [saving,   setSaving]   = useState(null);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole,  setInviteRole]  = useState("contributor");
+  const [inviting, setInviting] = useState(false);
+  const [inviteMsg, setInviteMsg] = useState(null);
+
+  const canManage = ["admin","hr_admin"].includes(userProfile?.role);
+  const isAdmin   = userProfile?.role === "admin";
+
+  useEffect(() => {
+    fetchAllProfiles().then(p => { setProfiles(p); setLoading(false); });
+  }, []);
+
+  async function handleRoleChange(profileId, newRole) {
+    setSaving(profileId + "_role");
+    await updateProfileRole(profileId, newRole);
+    setProfiles(prev => prev.map(p => p.id === profileId ? { ...p, role: newRole } : p));
+    setSaving(null);
+  }
+
+  async function handleManagerChange(profileId, managerId) {
+    setSaving(profileId + "_mgr");
+    await updateProfileManager(profileId, managerId || null);
+    setProfiles(prev => prev.map(p => p.id === profileId ? { ...p, manager_id: managerId || null } : p));
+    setSaving(null);
+  }
+
+  async function handleInvite() {
+    if (!inviteEmail.trim()) return;
+    setInviting(true); setInviteMsg(null);
+    const { error } = await supabase.auth.signInWithOtp({ email: inviteEmail.trim(), options: { shouldCreateUser: true } });
+    if (error) { setInviteMsg({ type: "error", text: error.message }); }
+    else {
+      setInviteMsg({ type: "ok", text: `Invite link sent to ${inviteEmail.trim()}. After they sign in, set their role below.` });
+      setInviteEmail(""); setInviteRole("contributor");
+      setTimeout(() => fetchAllProfiles().then(setProfiles), 2000);
+    }
+    setInviting(false);
+  }
+
+  const managers = profiles.filter(p => p.role === "manager");
+
+  const Sel = ({ value, options, onChange, disabled }) => (
+    <select value={value} onChange={e => onChange(e.target.value)} disabled={disabled}
+      style={{ padding:"4px 8px", borderRadius:"6px", border:`1px solid ${V.border}`, fontSize:"12px", background:"#fff", fontFamily:"inherit", cursor:"pointer", color: V.ink }}>
+      {options.map(([v,l]) => <option key={v} value={v}>{l}</option>)}
+    </select>
+  );
+
+  return (
+    <div style={{ padding:"28px 32px", maxWidth:960 }}>
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:"20px", flexWrap:"wrap", gap:"12px" }}>
+        <div>
+          <div style={{ fontSize:"20px", fontWeight:800, color:V.navy }}>Users & Roles</div>
+          <div style={{ fontSize:"12px", color:V.muted, marginTop:"2px" }}>{profiles.length} user{profiles.length !== 1 ? "s" : ""} · your role: <b>{ROLE_LABELS[userProfile?.role] || "—"}</b></div>
+        </div>
+      </div>
+
+      {/* Invite panel */}
+      {canManage && (
+        <div style={{ background:"#F8FAFC", border:`1px solid ${V.border}`, borderRadius:"12px", padding:"16px 20px", marginBottom:"24px" }}>
+          <div style={{ fontSize:"13px", fontWeight:700, color:V.navy, marginBottom:"10px" }}>Invite New User</div>
+          <div style={{ display:"flex", gap:"10px", flexWrap:"wrap", alignItems:"center" }}>
+            <input value={inviteEmail} onChange={e => setInviteEmail(e.target.value)} placeholder="email@virtuos.com"
+              onKeyDown={e => e.key === "Enter" && handleInvite()}
+              style={{ flex:1, minWidth:"220px", padding:"8px 12px", border:`1px solid ${V.border}`, borderRadius:"8px", fontSize:"13px", fontFamily:"inherit" }}/>
+            <button onClick={handleInvite} disabled={inviting || !inviteEmail.trim()}
+              style={{ padding:"8px 18px", background:V.pink, color:"#fff", border:"none", borderRadius:"8px", cursor:"pointer", fontSize:"13px", fontWeight:700, fontFamily:"inherit", opacity:inviteEmail.trim()?1:0.5 }}>
+              {inviting ? "Sending…" : "Send Invite"}
+            </button>
+          </div>
+          {inviteMsg && (
+            <div style={{ marginTop:"8px", fontSize:"12px", color: inviteMsg.type==="ok" ? "#10B981" : "#EF4444" }}>{inviteMsg.text}</div>
+          )}
+          <div style={{ marginTop:"8px", fontSize:"11px", color:V.muted }}>A magic-link sign-in email will be sent. Once they log in, assign their role below.</div>
+        </div>
+      )}
+
+      {/* Users table */}
+      {loading ? (
+        <div style={{ color:V.muted, fontSize:"13px" }}>Loading…</div>
+      ) : (
+        <div style={{ background:"#fff", border:`1px solid ${V.border}`, borderRadius:"12px", overflow:"hidden" }}>
+          <table style={{ width:"100%", borderCollapse:"collapse" }}>
+            <thead>
+              <tr style={{ background:"#F8FAFC" }}>
+                {["User","Email","Role","Reports To"].map(h => (
+                  <th key={h} style={{ padding:"10px 16px", textAlign:"left", fontSize:"11px", fontWeight:700, color:V.muted, textTransform:"uppercase", letterSpacing:"0.06em", borderBottom:`1px solid ${V.border}` }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {profiles.map((p, i) => {
+                const isCurrentUser = p.id === currentUser.id;
+                const managerName = p.manager_id ? (profiles.find(m => m.id === p.manager_id)?.full_name || "—") : "—";
+                return (
+                  <tr key={p.id} style={{ borderBottom: i < profiles.length-1 ? `1px solid ${V.border}` : "none", background: isCurrentUser ? "#FAFBFF" : "#fff" }}>
+                    <td style={{ padding:"12px 16px" }}>
+                      <div style={{ display:"flex", alignItems:"center", gap:"10px" }}>
+                        <div style={{ width:"32px", height:"32px", borderRadius:"50%", background: ROLE_COLORS[p.role] + "22", display:"flex", alignItems:"center", justifyContent:"center", fontSize:"13px", fontWeight:700, color: ROLE_COLORS[p.role], flexShrink:0 }}>
+                          {(p.full_name||p.email||"?").charAt(0).toUpperCase()}
+                        </div>
+                        <div>
+                          <div style={{ fontSize:"13px", fontWeight:600, color:V.ink }}>{p.full_name || "—"}{isCurrentUser && <span style={{ fontSize:"10px", color:V.muted, marginLeft:"6px" }}>(you)</span>}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td style={{ padding:"12px 16px", fontSize:"12.5px", color:V.muted }}>{p.email}</td>
+                    <td style={{ padding:"12px 16px" }}>
+                      {canManage && !isCurrentUser ? (
+                        <div style={{ display:"flex", alignItems:"center", gap:"6px" }}>
+                          <Sel value={p.role} onChange={v => handleRoleChange(p.id, v)}
+                            disabled={saving === p.id+"_role"}
+                            options={ALL_ROLES.map(r => [r, ROLE_LABELS[r]])}/>
+                          {saving === p.id+"_role" && <span style={{ fontSize:"11px", color:V.muted }}>saving…</span>}
+                        </div>
+                      ) : (
+                        <span style={{ display:"inline-block", padding:"2px 10px", borderRadius:"20px", fontSize:"11.5px", fontWeight:700, background: ROLE_COLORS[p.role]+"18", color: ROLE_COLORS[p.role] }}>
+                          {ROLE_LABELS[p.role]}
+                        </span>
+                      )}
+                    </td>
+                    <td style={{ padding:"12px 16px" }}>
+                      {canManage && p.role === "contributor" && !isCurrentUser ? (
+                        <div style={{ display:"flex", alignItems:"center", gap:"6px" }}>
+                          <Sel value={p.manager_id || ""} onChange={v => handleManagerChange(p.id, v)}
+                            disabled={saving === p.id+"_mgr"}
+                            options={[["","— No Manager —"], ...managers.map(m => [m.id, m.full_name || m.email])]}/>
+                          {saving === p.id+"_mgr" && <span style={{ fontSize:"11px", color:V.muted }}>saving…</span>}
+                        </div>
+                      ) : (
+                        <span style={{ fontSize:"12.5px", color: p.manager_id ? V.ink : V.muted }}>{managerName}</span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Role legend */}
+      <div style={{ marginTop:"24px", display:"flex", gap:"16px", flexWrap:"wrap" }}>
+        {[
+          ["admin",       "Can see all data, import, assign roles"],
+          ["hr_admin",    "Can see all data, assign roles & invite users — no imports"],
+          ["manager",     "Sees own quotes + their team's quotes"],
+          ["contributor", "Sees only their own quotes"],
+        ].map(([role, desc]) => (
+          <div key={role} style={{ display:"flex", alignItems:"center", gap:"8px", fontSize:"12px", color:V.muted }}>
+            <span style={{ display:"inline-block", padding:"1px 9px", borderRadius:"20px", fontSize:"11px", fontWeight:700, background: ROLE_COLORS[role]+"18", color: ROLE_COLORS[role] }}>{ROLE_LABELS[role]}</span>
+            <span>{desc}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function Sidebar({ view, setView, user, onSignOut, navItems, userProfile }) {
+  const items = navItems || NAV_ITEMS;
   return (
     <aside className="qb-sidebar">
       {/* Logo */}
@@ -1665,7 +1843,7 @@ function Sidebar({ view, setView, user, onSignOut }) {
 
       {/* Nav */}
       <nav className="qb-sidebar-nav">
-        {NAV_ITEMS.map(item => {
+        {items.map(item => {
           const active = view === item.id;
           return (
             <button key={item.id} onClick={() => setView(item.id)} className="qb-nav-item" data-active={active ? "1" : "0"}
@@ -1687,10 +1865,17 @@ function Sidebar({ view, setView, user, onSignOut }) {
         })}
       </nav>
 
-      {/* User / sign out */}
+      {/* User / role badge / sign out */}
       <div className="qb-sidebar-user" style={{ padding: "14px 16px", borderTop: "1px solid rgba(255,255,255,0.07)", marginTop: "auto" }}>
-        <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.32)", marginBottom: "9px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", padding: "0 2px" }}>
-          {user?.user_metadata?.full_name || user?.email}
+        <div style={{ display:"flex", alignItems:"center", gap:"6px", marginBottom:"8px" }}>
+          <div style={{ flex:1, fontSize: "11px", color: "rgba(255,255,255,0.38)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {user?.user_metadata?.full_name || user?.email}
+          </div>
+          {userProfile?.role && (
+            <span style={{ flexShrink:0, fontSize:"9px", fontWeight:700, padding:"2px 6px", borderRadius:"20px", background: ROLE_COLORS[userProfile.role]+"35", color: ROLE_COLORS[userProfile.role], textTransform:"uppercase", letterSpacing:"0.05em" }}>
+              {ROLE_LABELS[userProfile.role]}
+            </span>
+          )}
         </div>
         <button onClick={onSignOut}
           style={{ width: "100%", padding: "8px 12px", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.09)", borderRadius: "8px", color: "rgba(255,255,255,0.4)", cursor: "pointer", fontSize: "12px", fontFamily: "inherit", transition: "all 0.12s" }}
@@ -1960,7 +2145,8 @@ function QuoteHistory({ onNewQuote, onLoadQuote, user }) {
 export default function QuoteBuilder({ user, onSignOut }) {
   const today = new Date().toISOString().split("T")[0];
   const [view,         setView]         = useState("home");
-  const [dbReady,      setDbReady]      = useState(null); // null=checking, true=ok, false=missing
+  const [dbReady,      setDbReady]      = useState(null);
+  const [userProfile,  setUserProfile]  = useState(null);
   const [customer,     setCustomer]     = useState({ name: "", company: "", email: "", phone: "" });
   const [accountId,    setAccountId]    = useState(null);
   const [paymentTerms, setPaymentTerms] = useState("100% Advance");
@@ -1978,6 +2164,21 @@ export default function QuoteBuilder({ user, onSignOut }) {
     supabase.from("accounts").select("id").limit(1)
       .then(({ error }) => setDbReady(!error || error.code !== "42P01"));
   }, []);
+
+  useEffect(() => {
+    fetchUserProfile(user.id).then(p => setUserProfile(p || { role: "contributor" }));
+  }, [user.id]);
+
+  const userRole = userProfile?.role || "contributor";
+  const canManageRoles = userRole === "admin" || userRole === "hr_admin";
+
+  const navItems = [
+    { id: "home",     label: "Home",       icon: "⌂" },
+    { id: "builder",  label: "New Quote",  icon: "✦" },
+    { id: "accounts", label: "Accounts",   icon: "◈" },
+    { id: "history",  label: "All Quotes", icon: "≡" },
+    ...(canManageRoles ? [{ id: "users", label: "Users & Roles", icon: "◉" }] : []),
+  ];
 
   const handleCycle  = c => { setBillingCycle(c); if(c!=="custom") setEndDate(autoEndDate(startDate,c,monthCount)); };
   const handleStart  = d => { setStartDate(d); if(billingCycle!=="custom") setEndDate(autoEndDate(d,billingCycle,monthCount)); };
@@ -2113,7 +2314,7 @@ export default function QuoteBuilder({ user, onSignOut }) {
         }
       `}</style>
 
-      <Sidebar view={view} setView={handleNav} user={user} onSignOut={onSignOut}/>
+      <Sidebar view={view} setView={handleNav} user={user} onSignOut={onSignOut} navItems={navItems} userProfile={userProfile}/>
 
       {dbReady === false && (
         <div style={{ position:"fixed", top:0, left:0, right:0, zIndex:9999, background:"#FEF3C7", borderBottom:"2px solid #F59E0B", padding:"10px 20px", display:"flex", alignItems:"center", gap:"12px", flexWrap:"wrap" }}>
@@ -2141,6 +2342,10 @@ export default function QuoteBuilder({ user, onSignOut }) {
 
         {view === "history" && (
           <QuoteHistory onNewQuote={() => { resetQuote(); setView("builder"); }} onLoadQuote={loadQuote} user={user}/>
+        )}
+
+        {view === "users" && (
+          <UsersView currentUser={user} userProfile={userProfile}/>
         )}
 
         {view === "builder" && (
