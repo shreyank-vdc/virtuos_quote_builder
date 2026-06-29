@@ -646,6 +646,7 @@ async function exportQuoteHTML({cl,annualList,discTotal,subUSD,subLocal,taxLocal
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: 'DM Sans', Arial, sans-serif; background: #fff; color: #1E293B; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .page { width: 210mm; min-height: 297mm; margin: 0 auto; background: #fff; }
+    .page-break { min-height: 0; }
     @media print {
       @page { margin: 0.8cm; size: A4; }
       body { margin: 0; background: #fff; }
@@ -822,10 +823,10 @@ async function exportQuoteHTML({cl,annualList,discTotal,subUSD,subLocal,taxLocal
 
 <!-- ══ PAGE 2 ══ -->
 <div class="page page-break">
-  <div style="padding:32px 36px 36px;" class="page-body">
+  <div style="padding:20px 36px 24px;" class="page-body">
 
     <!-- Page 2 header -->
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:22px;">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;">
       <div>
         ${logoSVGDark}
         <div style="font-size:10px;color:#94A3B8;margin-top:4px;letter-spacing:0.06em;text-transform:uppercase;">Order Acceptance &amp; Signature Page</div>
@@ -844,7 +845,7 @@ async function exportQuoteHTML({cl,annualList,discTotal,subUSD,subLocal,taxLocal
     </div>
 
     <!-- Page 2 summary table -->
-    <div style="background:#F8FAFC;border-radius:10px;border:1px solid #E2E8F0;overflow:hidden;margin-bottom:22px;">
+    <div style="background:#F8FAFC;border-radius:10px;border:1px solid #E2E8F0;overflow:hidden;margin-bottom:16px;">
       <table>
         <thead><tr style="background:#0D1B3E;">
           <th style="padding:9px 16px;text-align:left;font-size:10px;font-weight:700;color:rgba(255,255,255,0.6);text-transform:uppercase;letter-spacing:0.07em;">Product</th>
@@ -866,10 +867,10 @@ async function exportQuoteHTML({cl,annualList,discTotal,subUSD,subLocal,taxLocal
       <div style="height:1px;flex:1;background:linear-gradient(90deg,transparent,#E2E8F0);"></div>
     </div>
 
-    <p style="font-size:12px;color:#475569;line-height:1.7;margin-bottom:22px;">By signing below, both parties agree to the terms and pricing set forth in this quotation (reference <strong>${qd.quoteId}</strong>), subject to the Terms &amp; Conditions on Page 1. This document constitutes a binding order upon counter-signature by an authorised Virtuos Digital representative. The subscription period will commence on <strong>${fD(startDate)}</strong> and expire on <strong>${fD(endDate)}</strong>. All pricing is in USD unless otherwise stated.</p>
+    <p style="font-size:12px;color:#475569;line-height:1.7;margin:0 0 16px;">By signing below, both parties agree to the terms and pricing set forth in this quotation (reference <strong>${qd.quoteId}</strong>), subject to the Terms &amp; Conditions on Page 1. This document constitutes a binding order upon counter-signature by an authorised Virtuos Digital representative. The subscription period will commence on <strong>${fD(startDate)}</strong> and expire on <strong>${fD(endDate)}</strong>. All pricing is in USD unless otherwise stated.</p>
 
     <!-- Signature blocks -->
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:28px;">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px;">
 
       <!-- Customer sig -->
       <div>
@@ -1183,10 +1184,10 @@ function QuotePreview({data,onClose}){
         </div>
 
         {/* ══ PAGE 2 — SIGNING PAGE ════════════════════════════════════════════ */}
-        <div style={{padding:"clamp(16px,4vw,32px) clamp(16px,4vw,36px) clamp(20px,4vw,36px)"}}>
+        <div style={{padding:"16px clamp(16px,4vw,36px) 24px"}}>
 
           {/* Page 2 header */}
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"24px"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"16px"}}>
             <div>
               <VirtuosLogo height={32}/>
               <div style={{fontSize:"10px",color:"#94A3B8",marginTop:"4px",letterSpacing:"0.06em",textTransform:"uppercase"}}>Order Acceptance & Signature Page</div>
@@ -1200,7 +1201,7 @@ function QuotePreview({data,onClose}){
           {sectionHeader("Quote Summary")}
 
           {/* Compact summary table for page 2 */}
-          <div style={{background:"#F8FAFC",borderRadius:"10px",border:"1px solid #E2E8F0",overflow:"auto",marginBottom:"24px"}}>
+          <div style={{background:"#F8FAFC",borderRadius:"10px",border:"1px solid #E2E8F0",overflow:"auto",marginBottom:"16px"}}>
             <div style={{background:"#0D1B3E",padding:"10px 16px",display:"grid",gridTemplateColumns:"2fr 1fr 1fr",gap:"8px",minWidth:0}}>
               {["Product","Qty","Net (USD)"].map(h=>(
                 <div key={h} style={{fontSize:"10px",fontWeight:700,color:"rgba(255,255,255,0.6)",textTransform:"uppercase",letterSpacing:"0.07em",textAlign:h==="Product"?"left":"right"}}>{h}</div>
@@ -1221,12 +1222,12 @@ function QuotePreview({data,onClose}){
 
           {sectionHeader("Acceptance & Authorisation")}
 
-          <p style={{fontSize:"12px",color:"#475569",lineHeight:1.7,marginBottom:"24px"}}>
+          <p style={{fontSize:"12px",color:"#475569",lineHeight:1.7,margin:"0 0 16px"}}>
             By signing below, both parties agree to the terms and pricing set forth in this quotation (reference <strong>{qd.quoteId}</strong>), subject to the Terms & Conditions on Page 1. This document constitutes a binding order upon counter-signature by an authorised Virtuos Digital representative. The subscription period will commence on <strong>{fmtDate(startDate)}</strong> and expire on <strong>{fmtDate(endDate)}</strong>. All pricing is in USD unless otherwise stated.
           </p>
 
           {/* Signature blocks */}
-          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))",gap:"24px",marginBottom:"32px"}}>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))",gap:"20px",marginBottom:"20px"}}>
             {/* Customer sig */}
             <div>
               <div style={{fontSize:"11px",fontWeight:800,color:V.ink,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:"14px",paddingBottom:"6px",borderBottom:`2px solid ${V.pink}`}}>
