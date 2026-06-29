@@ -280,7 +280,7 @@ function ProductLine({line,onUpdate,onRemove,billingCycle,startDate,endDate}){
 }
 
 // ─── HTML EXPORT ─────────────────────────────────────────────────────────────
-async function exportQuoteWord({cl,annualList,discTotal,subUSD,subLocal,taxLocal,grandLocal,customer,qd,currency,billingCycle,monthCount,startDate,endDate,taxConfig,paymentTerms,cats,sym}) {
+async function exportQuoteWord({cl,annualList,discTotal,subUSD,subLocal,taxLocal,grandLocal,customer,qd,currency,billingCycle,monthCount,startDate,endDate,taxConfig,paymentTerms,cats,sym,contractYears=1,yearEscalation=0,yearlyTotals=[],totalContractValue=0}) {
   const f$ = n => `$${n.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}`;
   const fC = (n,s) => `${s}${n.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}`;
   const fD = s => s ? new Date(s).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}) : "—";
@@ -470,6 +470,37 @@ async function exportQuoteWord({cl,annualList,discTotal,subUSD,subLocal,taxLocal
     ],
   });
 
+  // ── multi-year table ─────────────────────────────────────────────────────
+  const multiYearSection = contractYears > 1 ? [
+    para([run("Multi-Year Investment Summary", {bold:true, size:12})], {spaceBefore:16, spaceAfter:6}),
+    new Table({
+      width:{size:PAGE_W, type:WidthType.DXA},
+      rows:[
+        new TableRow({ children: [
+          new TableCell({children:[para([run("Year",{bold:true,size:10,color:"FFFFFF"})],{align:AlignmentType.CENTER})],shading:{fill:NAVY,type:ShadingType.CLEAR},borders:{top:{style:BorderStyle.SINGLE,size:4,color:NAVY},bottom:{style:BorderStyle.SINGLE,size:4,color:NAVY},left:{style:BorderStyle.SINGLE,size:4,color:NAVY},right:{style:BorderStyle.SINGLE,size:4,color:NAVY}},margins:{top:cm(0.1),bottom:cm(0.1),left:cm(0.18),right:cm(0.18)},width:{size:1800,type:WidthType.DXA}}),
+          new TableCell({children:[para([run(`Sub-Total (${currency.code})`,{bold:true,size:10,color:"FFFFFF"})],{align:AlignmentType.RIGHT})],shading:{fill:NAVY,type:ShadingType.CLEAR},borders:{top:{style:BorderStyle.SINGLE,size:4,color:NAVY},bottom:{style:BorderStyle.SINGLE,size:4,color:NAVY},left:{style:BorderStyle.SINGLE,size:4,color:NAVY},right:{style:BorderStyle.SINGLE,size:4,color:NAVY}},margins:{top:cm(0.1),bottom:cm(0.1),left:cm(0.18),right:cm(0.18)},width:{size:3000,type:WidthType.DXA}}),
+          ...(taxConfig.rate > 0 ? [new TableCell({children:[para([run(`${taxConfig.label}`,{bold:true,size:10,color:"FFFFFF"})],{align:AlignmentType.RIGHT})],shading:{fill:NAVY,type:ShadingType.CLEAR},borders:{top:{style:BorderStyle.SINGLE,size:4,color:NAVY},bottom:{style:BorderStyle.SINGLE,size:4,color:NAVY},left:{style:BorderStyle.SINGLE,size:4,color:NAVY},right:{style:BorderStyle.SINGLE,size:4,color:NAVY}},margins:{top:cm(0.1),bottom:cm(0.1),left:cm(0.18),right:cm(0.18)},width:{size:2500,type:WidthType.DXA}})] : []),
+          new TableCell({children:[para([run(`Total (${currency.code})`,{bold:true,size:10,color:"FFFFFF"})],{align:AlignmentType.RIGHT})],shading:{fill:NAVY,type:ShadingType.CLEAR},borders:{top:{style:BorderStyle.SINGLE,size:4,color:NAVY},bottom:{style:BorderStyle.SINGLE,size:4,color:NAVY},left:{style:BorderStyle.SINGLE,size:4,color:NAVY},right:{style:BorderStyle.SINGLE,size:4,color:NAVY}},margins:{top:cm(0.1),bottom:cm(0.1),left:cm(0.18),right:cm(0.18)}}),
+        ]}),
+        ...yearlyTotals.map((y, idx) => {
+          const bg = idx % 2 === 0 ? "FFFFFF" : "F8FAFC";
+          const taxAmt = y.subtotal * taxConfig.rate;
+          const label = y.year === 1 ? "Year 1" : `Year ${y.year}${yearEscalation > 0 ? ` (+${yearEscalation}%)` : ""}`;
+          return new TableRow({ children: [
+            new TableCell({children:[para([run(label,{bold:true,size:10})],{align:AlignmentType.CENTER})],shading:{fill:bg,type:ShadingType.CLEAR},borders:{top:{style:BorderStyle.SINGLE,size:4,color:BORDER_C},bottom:{style:BorderStyle.SINGLE,size:4,color:BORDER_C},left:{style:BorderStyle.SINGLE,size:4,color:BORDER_C},right:{style:BorderStyle.SINGLE,size:4,color:BORDER_C}},margins:{top:cm(0.08),bottom:cm(0.08),left:cm(0.18),right:cm(0.18)},width:{size:1800,type:WidthType.DXA}}),
+            new TableCell({children:[para([run(fC(y.subtotal,sym),{size:10})],{align:AlignmentType.RIGHT})],shading:{fill:bg,type:ShadingType.CLEAR},borders:{top:{style:BorderStyle.SINGLE,size:4,color:BORDER_C},bottom:{style:BorderStyle.SINGLE,size:4,color:BORDER_C},left:{style:BorderStyle.SINGLE,size:4,color:BORDER_C},right:{style:BorderStyle.SINGLE,size:4,color:BORDER_C}},margins:{top:cm(0.08),bottom:cm(0.08),left:cm(0.18),right:cm(0.18)},width:{size:3000,type:WidthType.DXA}}),
+            ...(taxConfig.rate > 0 ? [new TableCell({children:[para([run(fC(taxAmt,sym),{size:10})],{align:AlignmentType.RIGHT})],shading:{fill:bg,type:ShadingType.CLEAR},borders:{top:{style:BorderStyle.SINGLE,size:4,color:BORDER_C},bottom:{style:BorderStyle.SINGLE,size:4,color:BORDER_C},left:{style:BorderStyle.SINGLE,size:4,color:BORDER_C},right:{style:BorderStyle.SINGLE,size:4,color:BORDER_C}},margins:{top:cm(0.08),bottom:cm(0.08),left:cm(0.18),right:cm(0.18)},width:{size:2500,type:WidthType.DXA}})] : []),
+            new TableCell({children:[para([run(fC(y.grand,sym),{bold:true,size:10})],{align:AlignmentType.RIGHT})],shading:{fill:bg,type:ShadingType.CLEAR},borders:{top:{style:BorderStyle.SINGLE,size:4,color:BORDER_C},bottom:{style:BorderStyle.SINGLE,size:4,color:BORDER_C},left:{style:BorderStyle.SINGLE,size:4,color:BORDER_C},right:{style:BorderStyle.SINGLE,size:4,color:BORDER_C}},margins:{top:cm(0.08),bottom:cm(0.08),left:cm(0.18),right:cm(0.18)}}),
+          ]});
+        }),
+        new TableRow({ children: [
+          new TableCell({children:[para([run("TOTAL CONTRACT VALUE",{bold:true,size:11,color:"FFFFFF"})],{align:AlignmentType.RIGHT})],columnSpan: taxConfig.rate > 0 ? 3 : 2,shading:{fill:NAVY,type:ShadingType.CLEAR},borders:{top:{style:BorderStyle.SINGLE,size:4,color:NAVY},bottom:{style:BorderStyle.SINGLE,size:4,color:NAVY},left:{style:BorderStyle.SINGLE,size:4,color:NAVY},right:{style:BorderStyle.SINGLE,size:4,color:NAVY}},margins:{top:cm(0.1),bottom:cm(0.1),left:cm(0.18),right:cm(0.18)}}),
+          new TableCell({children:[para([run(fC(totalContractValue,sym),{bold:true,size:13,color:"FFFFFF"})],{align:AlignmentType.RIGHT})],shading:{fill:NAVY,type:ShadingType.CLEAR},borders:{top:{style:BorderStyle.SINGLE,size:4,color:NAVY},bottom:{style:BorderStyle.SINGLE,size:4,color:NAVY},left:{style:BorderStyle.SINGLE,size:4,color:NAVY},right:{style:BorderStyle.SINGLE,size:4,color:NAVY}},margins:{top:cm(0.1),bottom:cm(0.1),left:cm(0.18),right:cm(0.18)}}),
+        ]}),
+      ],
+    }),
+  ] : [];
+
   // ── signature table ───────────────────────────────────────────────────────
   const sigFields = ["Authorised Signatory Name","Title / Designation","Company Name","Date","Signature"];
   const sigTable = new Table({
@@ -505,6 +536,7 @@ async function exportQuoteWord({cl,annualList,discTotal,subUSD,subLocal,taxLocal
     billToTable,
     para([run("Products & Services",{bold:true,size:13,color:NAVY})],{spaceBefore:12,spaceAfter:4}),
     productsTable,
+    ...multiYearSection,
     para([run("Terms & Conditions",{bold:true,size:13,color:NAVY})],{spaceBefore:12,spaceAfter:4}),
     ...tcParas,
     ...(qd.notes?[
@@ -861,7 +893,7 @@ async function exportQuoteHTML({cl,annualList,discTotal,subUSD,subLocal,taxLocal
 
 // ─── QUOTE PREVIEW / EXPORT ──────────────────────────────────────────────────
 function QuotePreview({data,onClose}){
-  const {lines,customer,qd,currency,billingCycle,monthCount,startDate,endDate,taxConfig,paymentTerms}=data;
+  const {lines,customer,qd,currency,billingCycle,monthCount,startDate,endDate,taxConfig,paymentTerms,contractYears=1,yearEscalation=0,yearlyTotals=[],totalContractValue=0}=data;
   const sym=currency.symbol;
   const cl=computeLines(lines,startDate,endDate,billingCycle);
 
@@ -926,6 +958,7 @@ function QuotePreview({data,onClose}){
                 ["Issue Date",    qd.createdOn],
                 ["Valid Until",   qd.validUntil ? fmtDate(qd.validUntil) : "30 days"],
                 ["Period",        `${fmtDate(startDate)} → ${fmtDate(endDate)}`],
+                ["Contract Term", contractYears > 1 ? `${contractYears} Years${yearEscalation > 0 ? ` · ${yearEscalation}% escalation` : ""}` : "1 Year"],
                 ["Billing",       billingCycle==="monthly"?`Monthly (${monthCount} mo)`:billingCycle.charAt(0).toUpperCase()+billingCycle.slice(1)],
                 ["Payment Terms", paymentTerms],
               ].map(([k,v])=>(
@@ -1042,6 +1075,44 @@ function QuotePreview({data,onClose}){
               </div>
             </div>
           </div>
+
+          {/* Multi-Year Summary */}
+          {contractYears > 1 && (
+            <div style={{marginBottom:"28px"}}>
+              {sectionHeader(`${contractYears}-Year Investment Summary`)}
+              <div style={{borderRadius:"10px",overflow:"hidden",border:"1px solid #E2E8F0"}}>
+                <table style={{width:"100%",borderCollapse:"collapse",fontSize:"13px"}}>
+                  <thead>
+                    <tr style={{background:"#0D1B3E"}}>
+                      <th style={{padding:"10px 14px",textAlign:"left",color:"#fff",fontWeight:700,fontSize:"10px",textTransform:"uppercase",letterSpacing:"0.06em"}}>Year</th>
+                      <th style={{padding:"10px 14px",textAlign:"right",color:"#fff",fontWeight:700,fontSize:"10px",textTransform:"uppercase",letterSpacing:"0.06em"}}>Sub-Total ({currency.code})</th>
+                      {taxConfig.rate > 0 && <th style={{padding:"10px 14px",textAlign:"right",color:"#fff",fontWeight:700,fontSize:"10px",textTransform:"uppercase",letterSpacing:"0.06em"}}>{taxConfig.label}</th>}
+                      <th style={{padding:"10px 14px",textAlign:"right",color:"#fff",fontWeight:700,fontSize:"10px",textTransform:"uppercase",letterSpacing:"0.06em"}}>Total ({currency.code})</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {yearlyTotals.map((y, idx) => (
+                      <tr key={y.year} style={{background:idx%2===0?"#fff":"#F8FAFC",borderBottom:"1px solid #F1F5F9"}}>
+                        <td style={{padding:"11px 14px",fontWeight:700,color:V.ink}}>
+                          Year {y.year}
+                          {yearEscalation > 0 && y.year > 1 && <span style={{fontSize:"10.5px",fontWeight:600,color:"#0EA5E9",marginLeft:"6px",background:"#EFF6FF",padding:"1px 6px",borderRadius:"4px"}}>+{yearEscalation}%</span>}
+                        </td>
+                        <td style={{padding:"11px 14px",textAlign:"right",color:V.muted}}>{fmtC(y.subtotal,sym)}</td>
+                        {taxConfig.rate > 0 && <td style={{padding:"11px 14px",textAlign:"right",color:V.muted}}>{fmtC(y.subtotal*taxConfig.rate,sym)}</td>}
+                        <td style={{padding:"11px 14px",textAlign:"right",fontWeight:800,color:V.ink,fontSize:"14px"}}>{fmtC(y.grand,sym)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr style={{background:"#0D1B3E"}}>
+                      <td colSpan={taxConfig.rate > 0 ? 3 : 2} style={{padding:"12px 14px",textAlign:"right",fontWeight:700,color:"rgba(255,255,255,0.7)",fontSize:"11px",textTransform:"uppercase",letterSpacing:"0.05em"}}>Total Contract Value ({contractYears} years)</td>
+                      <td style={{padding:"12px 14px",textAlign:"right",fontWeight:900,color:"#fff",fontSize:"18px"}}>{fmtC(totalContractValue,sym)}</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+          )}
 
           {/* T&C */}
           {sectionHeader("Terms & Conditions")}
@@ -1180,7 +1251,7 @@ function QuotePreview({data,onClose}){
         {/* Modal action bar */}
         <div className="qp-action-bar">
           <button onClick={onClose} style={{padding:"9px 20px",border:`1.5px solid ${V.border}`,borderRadius:"8px",background:"#fff",cursor:"pointer",fontSize:"13px",fontWeight:600,color:V.ink,fontFamily:"inherit"}}>Close</button>
-          <button onClick={()=>exportQuoteWord({cl,annualList,discTotal,subUSD,subLocal,taxLocal,grandLocal,customer,qd,currency,billingCycle,monthCount,startDate,endDate,taxConfig,paymentTerms,cats,sym})}
+          <button onClick={()=>exportQuoteWord({cl,annualList,discTotal,subUSD,subLocal,taxLocal,grandLocal,customer,qd,currency,billingCycle,monthCount,startDate,endDate,taxConfig,paymentTerms,cats,sym,contractYears,yearEscalation,yearlyTotals,totalContractValue})}
             style={{padding:"9px 22px",background:"linear-gradient(135deg,#1D4ED8,#2563EB)",color:"#fff",border:"none",borderRadius:"8px",cursor:"pointer",fontSize:"13px",fontWeight:700,boxShadow:"0 4px 12px rgba(29,78,216,0.35)",fontFamily:"inherit"}}>
             📄 Export Word (.doc)
           </button>
@@ -2157,8 +2228,10 @@ export default function QuoteBuilder({ user, onSignOut }) {
   const [monthCount,   setMonthCount]   = useState(12);
   const [startDate,    setStartDate]    = useState(today);
   const [endDate,      setEndDate]      = useState(autoEndDate(today, "annual", 12));
-  const [taxConfig,    setTaxConfig]    = useState(TAX_RATES[0]);
-  const [showPreview,  setShowPreview]  = useState(false);
+  const [taxConfig,      setTaxConfig]      = useState(TAX_RATES[0]);
+  const [contractYears,  setContractYears]  = useState(1);
+  const [yearEscalation, setYearEscalation] = useState(0);
+  const [showPreview,    setShowPreview]    = useState(false);
 
   useEffect(() => {
     supabase.from("accounts").select("id").limit(1)
@@ -2233,6 +2306,21 @@ export default function QuoteBuilder({ user, onSignOut }) {
     const taxLocal   = subLocal * taxConfig.rate;
     return { annualList, discTotal, subUSD, subLocal, taxLocal, grand: subLocal + taxLocal };
   }, [lines, startDate, endDate, billingCycle, currency, taxConfig]);
+
+  const yearlyTotals = useMemo(() => {
+    const taxMult = 1 + taxConfig.rate;
+    return Array.from({length: contractYears}, (_, i) => {
+      const factor = Math.pow(1 + yearEscalation / 100, i);
+      return {
+        year: i + 1,
+        subtotal: totals.subLocal * factor,
+        grand:    totals.subLocal * factor * taxMult,
+        subtotalUSD: totals.subUSD * factor,
+      };
+    });
+  }, [contractYears, yearEscalation, totals.subUSD, totals.subLocal, taxConfig.rate]);
+  const totalContractValue = yearlyTotals.reduce((s, y) => s + y.grand, 0);
+  const totalContractUSD   = yearlyTotals.reduce((s, y) => s + y.subtotalUSD, 0);
 
   const days  = daysBetween(startDate, endDate);
   const prPct = billingCycle !== "annual" ? `Pro-rata: ${(proRataFactor(startDate,endDate,billingCycle)*100).toFixed(2)}%` : null;
@@ -2430,6 +2518,22 @@ export default function QuoteBuilder({ user, onSignOut }) {
                         📆 {days} days{billingCycle==="annual"&&days>=364?" · Full annual period":""}{prPct?` · ${prPct}`:""}
                       </div>
                     )}
+                    <div style={{height:"1px",background:V.border,margin:"4px 0"}}/>
+                    <Sel label="Contract Term" value={contractYears} onChange={v => setContractYears(Number(v))}
+                      options={[
+                        {value:1, label:"1 Year"},
+                        {value:2, label:"2 Years"},
+                        {value:3, label:"3 Years"},
+                      ]}/>
+                    {contractYears > 1 && (
+                      <Sel label="Annual Price Escalation" value={yearEscalation} onChange={v => setYearEscalation(Number(v))}
+                        options={[
+                          {value:0,  label:"0% — Flat (no escalation)"},
+                          {value:3,  label:"3% per year"},
+                          {value:5,  label:"5% per year"},
+                          {value:10, label:"10% per year"},
+                        ]}/>
+                    )}
                   </Panel>
 
                   <Panel title="Currency & Tax" icon="💱">
@@ -2501,9 +2605,24 @@ export default function QuoteBuilder({ user, onSignOut }) {
                           </div>
                         ))}
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: "4px" }}>
-                          <span style={{ fontSize: "13px", fontWeight: 700, color: "rgba(255,255,255,0.7)" }}>Total ({currency.code})</span>
+                          <span style={{ fontSize: "13px", fontWeight: 700, color: "rgba(255,255,255,0.7)" }}>Year 1 Total ({currency.code})</span>
                           <span style={{ fontSize: "clamp(18px,5vw,22px)", fontWeight: 900, color: "#fff" }}>{fmtC(totals.grand, currency.symbol)}</span>
                         </div>
+                        {contractYears > 1 && (
+                          <div style={{ marginTop: "12px", borderTop: "1px solid rgba(255,255,255,0.12)", paddingTop: "12px" }}>
+                            <div style={{ fontSize: "10px", fontWeight: 800, color: "rgba(255,255,255,0.4)", textTransform: "uppercase", letterSpacing: "0.09em", marginBottom: "8px" }}>Multi-Year Commitment</div>
+                            {yearlyTotals.map(y => (
+                              <div key={y.year} style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+                                <span style={{ fontSize: "12.5px", color: "rgba(255,255,255,0.55)" }}>Year {y.year}{yearEscalation > 0 && y.year > 1 ? ` (+${yearEscalation}%)` : ""}</span>
+                                <span style={{ fontSize: "12.5px", fontWeight: 700, color: "#93C5FD" }}>{fmtC(y.grand, currency.symbol)}</span>
+                              </div>
+                            ))}
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: "8px" }}>
+                              <span style={{ fontSize: "12px", fontWeight: 700, color: "rgba(255,255,255,0.8)" }}>Total Contract Value</span>
+                              <span style={{ fontSize: "17px", fontWeight: 900, color: "#A78BFA" }}>{fmtC(totalContractValue, currency.symbol)}</span>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
                   )}
@@ -2516,7 +2635,7 @@ export default function QuoteBuilder({ user, onSignOut }) {
 
       {showPreview && (
         <QuotePreview
-          data={{ lines, customer, qd, currency, billingCycle, monthCount, startDate, endDate, taxConfig, paymentTerms }}
+          data={{ lines, customer, qd, currency, billingCycle, monthCount, startDate, endDate, taxConfig, paymentTerms, contractYears, yearEscalation, yearlyTotals, totalContractValue }}
           onClose={() => setShowPreview(false)}/>
       )}
     </div>
