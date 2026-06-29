@@ -448,8 +448,7 @@ async function exportQuoteHTML({cl,annualList,discTotal,subUSD,subLocal,taxLocal
     }
     @media screen {
       body { background: #E2E8F0; padding: 20px; }
-      .page { box-shadow: 0 4px 30px rgba(0,0,0,0.15); margin-bottom: 20px; min-height: 297mm; }
-      .page-break { min-height: 0 !important; }
+      .page { box-shadow: 0 4px 30px rgba(0,0,0,0.15); margin-bottom: 20px; }
     }
     @media screen and (max-width: 700px) {
       body { padding: 8px; }
@@ -578,7 +577,7 @@ async function exportQuoteHTML({cl,annualList,discTotal,subUSD,subLocal,taxLocal
 
 <!-- ══ PAGE 2 ══ -->
 <div class="page page-break">
-  <div style="padding:32px 36px 36px;" class="page-body">
+  <div style="padding:20px 36px 36px;" class="page-body">
 
     <!-- Page 2 header -->
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:22px;">
