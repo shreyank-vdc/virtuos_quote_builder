@@ -558,15 +558,6 @@ async function exportQuoteHTML({cl,annualList,discTotal,subUSD,subLocal,taxLocal
       </div>
     </div>
 
-    <!-- T&C -->
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
-      <div style="height:1px;flex:1;background:linear-gradient(90deg,#E2E8F0,transparent);"></div>
-      <span style="font-size:10px;font-weight:800;color:#94A3B8;text-transform:uppercase;letter-spacing:0.1em;white-space:nowrap;">Terms &amp; Conditions</span>
-      <div style="height:1px;flex:1;background:linear-gradient(90deg,transparent,#E2E8F0);"></div>
-    </div>
-    ${tcBlocks}
-    ${qd.notes ? `<div style="background:#FFFBEB;border-radius:8px;padding:11px 14px;border-left:3px solid #F59E0B;margin-top:10px;"><div style="font-size:10.5px;font-weight:800;color:#B45309;text-transform:uppercase;letter-spacing:0.07em;margin-bottom:4px;">Notes</div><p style="font-size:11.5px;color:#78350F;line-height:1.6;">${qd.notes}</p></div>` : ""}
-
     <!-- Footer -->
     <div style="display:flex;justify-content:space-between;align-items:center;padding-top:16px;border-top:1px solid #E2E8F0;margin-top:16px;">
       <div style="font-size:10px;color:#94A3B8;">This quote is confidential and prepared exclusively for ${customer.company||"the named customer"}.</div>
@@ -614,14 +605,23 @@ async function exportQuoteHTML({cl,annualList,discTotal,subUSD,subLocal,taxLocal
       </table>
     </div>
 
+    <!-- T&C on page 2 -->
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+      <div style="height:1px;flex:1;background:linear-gradient(90deg,#E2E8F0,transparent);"></div>
+      <span style="font-size:10px;font-weight:800;color:#94A3B8;text-transform:uppercase;letter-spacing:0.1em;white-space:nowrap;">Terms &amp; Conditions</span>
+      <div style="height:1px;flex:1;background:linear-gradient(90deg,transparent,#E2E8F0);"></div>
+    </div>
+    ${tcBlocks}
+    ${qd.notes ? `<div style="background:#FFFBEB;border-radius:8px;padding:10px 14px;border-left:3px solid #F59E0B;margin-top:8px;margin-bottom:0;"><div style="font-size:10.5px;font-weight:800;color:#B45309;text-transform:uppercase;letter-spacing:0.07em;margin-bottom:4px;">Notes</div><p style="font-size:11px;color:#78350F;line-height:1.5;">${qd.notes}</p></div>` : ""}
+
     <!-- Acceptance divider -->
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;margin-top:18px;">
       <div style="height:1px;flex:1;background:linear-gradient(90deg,#E2E8F0,transparent);"></div>
       <span style="font-size:10px;font-weight:800;color:#94A3B8;text-transform:uppercase;letter-spacing:0.1em;white-space:nowrap;">Acceptance &amp; Authorisation</span>
       <div style="height:1px;flex:1;background:linear-gradient(90deg,transparent,#E2E8F0);"></div>
     </div>
 
-    <p style="font-size:12px;color:#475569;line-height:1.7;margin-bottom:22px;">By signing below, both parties agree to the terms and pricing set forth in this quotation (reference <strong>${qd.quoteId}</strong>), subject to the Terms &amp; Conditions on Page 1. This document constitutes a binding order upon counter-signature by an authorised Virtuos Digital representative. The subscription period will commence on <strong>${fD(startDate)}</strong> and expire on <strong>${fD(endDate)}</strong>. All pricing is in USD unless otherwise stated.</p>
+    <p style="font-size:12px;color:#475569;line-height:1.7;margin-bottom:22px;">By signing below, both parties agree to the terms and pricing set forth in this quotation (reference <strong>${qd.quoteId}</strong>), subject to the Terms &amp; Conditions above. This document constitutes a binding order upon counter-signature by an authorised Virtuos Digital representative. The subscription period will commence on <strong>${fD(startDate)}</strong> and expire on <strong>${fD(endDate)}</strong>. All pricing is in USD unless otherwise stated.</p>
 
     <!-- Signature blocks -->
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:28px;">
@@ -867,24 +867,6 @@ function QuotePreview({data,onClose}){
             </div>
           </div>
 
-          {/* T&C */}
-          {sectionHeader("Terms & Conditions")}
-          <div style={{display:"flex",flexDirection:"column",gap:"10px",marginBottom:"20px"}}>
-            {cats.map(cat=>(
-              <div key={cat} style={{background:PRODUCTS[cat].bgColor,borderRadius:"8px",padding:"12px 14px",borderLeft:`3px solid ${PRODUCTS[cat].color}`}}>
-                <div style={{fontSize:"10.5px",fontWeight:800,color:PRODUCTS[cat].color,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:"5px"}}>{PRODUCTS[cat].label}</div>
-                <p style={{fontSize:"11px",color:"#475569",lineHeight:1.65,margin:0}}>{PRODUCTS[cat].tc}</p>
-              </div>
-            ))}
-          </div>
-
-          {qd.notes&&(
-            <div style={{background:"#FFFBEB",borderRadius:"8px",padding:"12px 14px",borderLeft:"3px solid #F59E0B",marginBottom:"20px"}}>
-              <div style={{fontSize:"10.5px",fontWeight:800,color:"#B45309",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:"5px"}}>Notes</div>
-              <p style={{fontSize:"11.5px",color:"#78350F",margin:0,lineHeight:1.6}}>{qd.notes}</p>
-            </div>
-          )}
-
           {/* Page footer */}
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",paddingTop:"16px",borderTop:"1px solid #E2E8F0"}}>
             <div style={{fontSize:"10px",color:"#94A3B8"}}>This quote is confidential and prepared exclusively for {customer.company||"the named customer"}.</div>
@@ -934,10 +916,26 @@ function QuotePreview({data,onClose}){
             </div>
           </div>
 
+          {sectionHeader("Terms & Conditions")}
+          <div style={{display:"flex",flexDirection:"column",gap:"8px",marginBottom:"16px"}}>
+            {cats.map(cat=>(
+              <div key={cat} style={{background:PRODUCTS[cat].bgColor,borderRadius:"8px",padding:"10px 14px",borderLeft:`3px solid ${PRODUCTS[cat].color}`}}>
+                <div style={{fontSize:"10.5px",fontWeight:800,color:PRODUCTS[cat].color,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:"4px"}}>{PRODUCTS[cat].label}</div>
+                <p style={{fontSize:"11px",color:"#475569",lineHeight:1.5,margin:0}}>{PRODUCTS[cat].tc}</p>
+              </div>
+            ))}
+          </div>
+          {qd.notes&&(
+            <div style={{background:"#FFFBEB",borderRadius:"8px",padding:"10px 14px",borderLeft:"3px solid #F59E0B",marginBottom:"14px"}}>
+              <div style={{fontSize:"10.5px",fontWeight:800,color:"#B45309",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:"4px"}}>Notes</div>
+              <p style={{fontSize:"11px",color:"#78350F",margin:0,lineHeight:1.5}}>{qd.notes}</p>
+            </div>
+          )}
+
           {sectionHeader("Acceptance & Authorisation")}
 
           <p style={{fontSize:"12px",color:"#475569",lineHeight:1.7,marginBottom:"24px"}}>
-            By signing below, both parties agree to the terms and pricing set forth in this quotation (reference <strong>{qd.quoteId}</strong>), subject to the Terms & Conditions on Page 1. This document constitutes a binding order upon counter-signature by an authorised Virtuos Digital representative. The subscription period will commence on <strong>{fmtDate(startDate)}</strong> and expire on <strong>{fmtDate(endDate)}</strong>. All pricing is in USD unless otherwise stated.
+            By signing below, both parties agree to the terms and pricing set forth in this quotation (reference <strong>{qd.quoteId}</strong>), subject to the Terms & Conditions above. This document constitutes a binding order upon counter-signature by an authorised Virtuos Digital representative. The subscription period will commence on <strong>{fmtDate(startDate)}</strong> and expire on <strong>{fmtDate(endDate)}</strong>. All pricing is in USD unless otherwise stated.
           </p>
 
           {/* Signature blocks */}
