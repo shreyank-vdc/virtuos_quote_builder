@@ -574,7 +574,7 @@ async function exportQuoteWord({cl,annualList,discTotal,subUSD,subLocal,taxLocal
   setTimeout(()=>URL.revokeObjectURL(url),10000);
 }
 
-async function exportQuoteHTML({cl,annualList,discTotal,subUSD,subLocal,taxLocal,grandLocal,customer,qd,currency,billingCycle,monthCount,startDate,endDate,taxConfig,paymentTerms,cats,sym}) {
+async function exportQuoteHTML({cl,annualList,discTotal,subUSD,subLocal,taxLocal,grandLocal,customer,qd,currency,billingCycle,monthCount,startDate,endDate,taxConfig,paymentTerms,cats,sym,contractYears=1,yearEscalation=0,yearlyTotals=[],totalContractValue=0}) {
   const f$ = n => `$${n.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}`;
   const fC = (n,s) => `${s}${n.toLocaleString(numLocale(currency.code),{minimumFractionDigits:2,maximumFractionDigits:2})}`;
   const fD = s => s ? new Date(s).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}) : "—";
@@ -767,6 +767,41 @@ async function exportQuoteHTML({cl,annualList,discTotal,subUSD,subLocal,taxLocal
         </div>
       </div>
     </div>
+
+    ${contractYears > 1 ? `
+    <!-- Multi-Year Summary -->
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+      <div style="height:1px;flex:1;background:linear-gradient(90deg,#E2E8F0,transparent);"></div>
+      <span style="font-size:10px;font-weight:800;color:#94A3B8;text-transform:uppercase;letter-spacing:0.1em;white-space:nowrap;">${contractYears}-Year Investment Summary</span>
+      <div style="height:1px;flex:1;background:linear-gradient(90deg,transparent,#E2E8F0);"></div>
+    </div>
+    <div style="border-radius:10px;overflow:hidden;border:1px solid #E2E8F0;margin-bottom:26px;">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead>
+          <tr style="background:#0D1B3E;">
+            <th style="padding:10px 14px;text-align:left;color:#fff;font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:0.06em;">Year</th>
+            <th style="padding:10px 14px;text-align:right;color:#fff;font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:0.06em;">Sub-Total (${currency.code})</th>
+            ${taxConfig.rate > 0 ? `<th style="padding:10px 14px;text-align:right;color:#fff;font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:0.06em;">${taxConfig.label}</th>` : ""}
+            <th style="padding:10px 14px;text-align:right;color:#fff;font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:0.06em;">Total (${currency.code})</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${yearlyTotals.map((y, idx) => `
+          <tr style="background:${idx%2===0?"#fff":"#F8FAFC"};border-bottom:1px solid #F1F5F9;">
+            <td style="padding:11px 14px;font-weight:700;color:#1E293B;">Year ${y.year}${yearEscalation > 0 && y.year > 1 ? `<span style="font-size:10px;font-weight:600;color:#0EA5E9;margin-left:6px;background:#EFF6FF;padding:1px 6px;border-radius:4px;">+${yearEscalation}%</span>` : ""}</td>
+            <td style="padding:11px 14px;text-align:right;color:#64748B;">${fC(y.subtotal,sym)}</td>
+            ${taxConfig.rate > 0 ? `<td style="padding:11px 14px;text-align:right;color:#64748B;">${fC(y.subtotal*taxConfig.rate,sym)}</td>` : ""}
+            <td style="padding:11px 14px;text-align:right;font-weight:800;color:#1E293B;font-size:14px;">${fC(y.grand,sym)}</td>
+          </tr>`).join("")}
+        </tbody>
+        <tfoot>
+          <tr style="background:#0D1B3E;">
+            <td colspan="${taxConfig.rate > 0 ? 3 : 2}" style="padding:12px 14px;text-align:right;font-weight:700;color:rgba(255,255,255,0.7);font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Total Contract Value (${contractYears} years)</td>
+            <td style="padding:12px 14px;text-align:right;font-weight:900;color:#fff;font-size:18px;">${fC(totalContractValue,sym)}</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>` : ""}
 
     <!-- T&C -->
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
@@ -1258,7 +1293,7 @@ function QuotePreview({data,onClose}){
             style={{padding:"9px 22px",background:"linear-gradient(135deg,#1D4ED8,#2563EB)",color:"#fff",border:"none",borderRadius:"8px",cursor:"pointer",fontSize:"13px",fontWeight:700,boxShadow:"0 4px 12px rgba(29,78,216,0.35)",fontFamily:"inherit"}}>
             📄 Export Word (.doc)
           </button>
-          <button onClick={()=>exportQuoteHTML({cl,annualList,discTotal,subUSD,subLocal,taxLocal,grandLocal,customer,qd,currency,billingCycle,monthCount,startDate,endDate,taxConfig,paymentTerms,cats,sym})}
+          <button onClick={()=>exportQuoteHTML({cl,annualList,discTotal,subUSD,subLocal,taxLocal,grandLocal,customer,qd,currency,billingCycle,monthCount,startDate,endDate,taxConfig,paymentTerms,cats,sym,contractYears,yearEscalation,yearlyTotals,totalContractValue})}
             style={{padding:"9px 22px",background:"linear-gradient(135deg,#0D1B3E,#1A2C55)",color:"#fff",border:"none",borderRadius:"8px",cursor:"pointer",fontSize:"13px",fontWeight:700,boxShadow:"0 4px 12px rgba(13,27,62,0.35)",fontFamily:"inherit"}}>
             🖨 Export / Print PDF
           </button>
