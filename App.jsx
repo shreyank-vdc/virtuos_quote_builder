@@ -121,10 +121,10 @@ function proRataFactor(s,e,cycle){
   // Monthly: fraction of annual price (can exceed 1 for multi-month).
   return d/365;
 }
-function autoEndDate(start,cycle,months){
+function autoEndDate(start,cycle,months,contractYears=1){
   if(!start)return "";
   const d=new Date(start);
-  if(cycle==="annual"){d.setFullYear(d.getFullYear()+1);d.setDate(d.getDate()-1);}
+  if(cycle==="annual"){d.setFullYear(d.getFullYear()+contractYears);d.setDate(d.getDate()-1);}
   else if(cycle==="quarterly"){d.setMonth(d.getMonth()+3);d.setDate(d.getDate()-1);}
   else if(cycle==="monthly"){
     // Day-based so fractional months (e.g. 6.5) work precisely
@@ -2256,9 +2256,10 @@ export default function QuoteBuilder({ user, onSignOut }) {
     ...(canManageRoles ? [{ id: "users", label: "Users & Roles", icon: "◉" }] : []),
   ];
 
-  const handleCycle  = c => { setBillingCycle(c); if(c!=="custom") setEndDate(autoEndDate(startDate,c,monthCount)); };
-  const handleStart  = d => { setStartDate(d); if(billingCycle!=="custom") setEndDate(autoEndDate(d,billingCycle,monthCount)); };
-  const handleMonths = n => { const m=Math.max(0.5,parseFloat(n)||0.5); setMonthCount(m); setEndDate(autoEndDate(startDate,"monthly",m)); };
+  const handleCycle        = c => { setBillingCycle(c); if(c!=="custom") setEndDate(autoEndDate(startDate,c,monthCount,contractYears)); };
+  const handleStart        = d => { setStartDate(d); if(billingCycle!=="custom") setEndDate(autoEndDate(d,billingCycle,monthCount,contractYears)); };
+  const handleMonths       = n => { const m=Math.max(0.5,parseFloat(n)||0.5); setMonthCount(m); setEndDate(autoEndDate(startDate,"monthly",m,contractYears)); };
+  const handleContractYears = y => { setContractYears(y); if(billingCycle==="annual") setEndDate(autoEndDate(startDate,"annual",12,y)); };
 
   function resetQuote() {
     setCustomer({ name: "", company: "", email: "", phone: "" });
@@ -2522,7 +2523,7 @@ export default function QuoteBuilder({ user, onSignOut }) {
                       </div>
                     )}
                     <div style={{height:"1px",background:V.border,margin:"4px 0"}}/>
-                    <Sel label="Contract Term" value={contractYears} onChange={v => setContractYears(Number(v))}
+                    <Sel label="Contract Term" value={contractYears} onChange={v => handleContractYears(Number(v))}
                       options={[
                         {value:1, label:"1 Year"},
                         {value:2, label:"2 Years"},
