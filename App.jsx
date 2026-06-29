@@ -435,7 +435,7 @@ async function exportQuoteHTML({cl,annualList,discTotal,subUSD,subLocal,taxLocal
     @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap');
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: 'DM Sans', Arial, sans-serif; background: #fff; color: #1E293B; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    .page { width: 210mm; min-height: 297mm; margin: 0 auto; background: #fff; }
+    .page { width: 210mm; margin: 0 auto; background: #fff; }
     @media print {
       @page { margin: 0.8cm; size: A4; }
       body { margin: 0; background: #fff; }
@@ -448,7 +448,8 @@ async function exportQuoteHTML({cl,annualList,discTotal,subUSD,subLocal,taxLocal
     }
     @media screen {
       body { background: #E2E8F0; padding: 20px; }
-      .page { box-shadow: 0 4px 30px rgba(0,0,0,0.15); margin-bottom: 20px; }
+      .page { box-shadow: 0 4px 30px rgba(0,0,0,0.15); margin-bottom: 20px; min-height: 297mm; }
+      .page-break { min-height: 0 !important; }
     }
     @media screen and (max-width: 700px) {
       body { padding: 8px; }
