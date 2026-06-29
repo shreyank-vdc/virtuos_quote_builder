@@ -64,7 +64,8 @@ const PRODUCTS = {
     tiers: [
       { id: "ss-pro",        name: "Smartsheet Pro",        unitPrice: 108.00, description: "$9.00/user/mo × 12" },
       { id: "ss-business",   name: "Smartsheet Business",   unitPrice: 228.00, description: "$19.00/user/mo × 12" },
-      { id: "ss-enterprise", name: "Smartsheet Enterprise", unitPrice: 540.00, description: "$45.00/user/mo × 12" },
+      { id: "ss-enterprise",         name: "Smartsheet Enterprise",                        unitPrice: 540.00, description: "$45.00/user/mo × 12" },
+      { id: "ss-enterprise-premium", name: "Smartsheet Enterprise with Premium Support",    unitPrice: 540.00, description: "$45.00/user/mo × 12 · Premium Support incl." },
     ],
     addOns: [
       { id: "ss-standard-support", name: "Standard Support Package", unitPrice: 6.00,   description: "$6.00/user/yr" },
@@ -101,7 +102,8 @@ const TAX_RATES = [
 
 // ─── UTILS ───────────────────────────────────────────────────────────────────
 const fmt$ = n => `$${n.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}`;
-const fmtC = (n, sym) => `${sym}${n.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}`;
+const numLocale = code => code === "INR" ? "en-IN" : "en-US";
+const fmtC = (n, sym, code="USD") => `${sym}${n.toLocaleString(numLocale(code),{minimumFractionDigits:2,maximumFractionDigits:2})}`;
 const fmtDate = s => s ? new Date(s).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}) : "—";
 
 function generateQuoteId() {
@@ -282,7 +284,7 @@ function ProductLine({line,onUpdate,onRemove,billingCycle,startDate,endDate}){
 // ─── HTML EXPORT ─────────────────────────────────────────────────────────────
 async function exportQuoteWord({cl,annualList,discTotal,subUSD,subLocal,taxLocal,grandLocal,customer,qd,currency,billingCycle,monthCount,startDate,endDate,taxConfig,paymentTerms,cats,sym,contractYears=1,yearEscalation=0,yearlyTotals=[],totalContractValue=0}) {
   const f$ = n => `$${n.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}`;
-  const fC = (n,s) => `${s}${n.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}`;
+  const fC = (n,s) => `${s}${n.toLocaleString(numLocale(currency.code),{minimumFractionDigits:2,maximumFractionDigits:2})}`;
   const fD = s => s ? new Date(s).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}) : "—";
   const cycleLabel = billingCycle==="monthly"?`Monthly (${monthCount} mo)`:billingCycle==="custom"?"Custom Period":billingCycle.charAt(0).toUpperCase()+billingCycle.slice(1);
   const hasDiscount = cl.some(l=>l.disc>0);
@@ -574,7 +576,7 @@ async function exportQuoteWord({cl,annualList,discTotal,subUSD,subLocal,taxLocal
 
 async function exportQuoteHTML({cl,annualList,discTotal,subUSD,subLocal,taxLocal,grandLocal,customer,qd,currency,billingCycle,monthCount,startDate,endDate,taxConfig,paymentTerms,cats,sym}) {
   const f$ = n => `$${n.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}`;
-  const fC = (n,s) => `${s}${n.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}`;
+  const fC = (n,s) => `${s}${n.toLocaleString(numLocale(currency.code),{minimumFractionDigits:2,maximumFractionDigits:2})}`;
   const fD = s => s ? new Date(s).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}) : "—";
   const cycleLabel = billingCycle==="monthly" ? `Monthly (${monthCount} mo)` : billingCycle==="custom" ? "Custom Period" : billingCycle.charAt(0).toUpperCase()+billingCycle.slice(1);
   const days = daysBetween(startDate,endDate);
@@ -895,6 +897,7 @@ async function exportQuoteHTML({cl,annualList,discTotal,subUSD,subLocal,taxLocal
 function QuotePreview({data,onClose}){
   const {lines,customer,qd,currency,billingCycle,monthCount,startDate,endDate,taxConfig,paymentTerms,contractYears=1,yearEscalation=0,yearlyTotals=[],totalContractValue=0}=data;
   const sym=currency.symbol;
+  const lcl = n => fmtC(n, sym, currency.code);
   const cl=computeLines(lines,startDate,endDate,billingCycle);
 
   const annualList  = cl.reduce((s,l)=>s+l.annual,0);
@@ -1049,7 +1052,7 @@ function QuotePreview({data,onClose}){
                   <div style={{fontSize:"10px",fontWeight:800,color:"#94A3B8",textTransform:"uppercase",letterSpacing:"0.09em",marginBottom:"8px"}}>Currency Conversion</div>
                   {[
                     [`FX Rate (1 USD → ${currency.code})`, currency.rate.toFixed(2)],
-                    [`Sub-Total (${currency.code})`, fmtC(subLocal,sym)],
+                    [`Sub-Total (${currency.code})`, lcl(subLocal)],
                   ].map(([l,v])=>(
                     <div key={l} style={{display:"flex",justifyContent:"space-between",padding:"3px 0"}}>
                       <span style={{fontSize:"12.5px",color:V.muted}}>{l}</span>
@@ -1064,12 +1067,12 @@ function QuotePreview({data,onClose}){
                 {taxConfig.rate>0&&(
                   <div style={{display:"flex",justifyContent:"space-between",padding:"3px 0 8px",borderBottom:"1px solid rgba(255,255,255,0.12)",marginBottom:"8px"}}>
                     <span style={{fontSize:"12.5px",color:"rgba(255,255,255,0.6)"}}>{taxConfig.label}</span>
-                    <span style={{fontSize:"12.5px",fontWeight:600,color:"rgba(255,255,255,0.8)"}}>{fmtC(taxLocal,sym)}</span>
+                    <span style={{fontSize:"12.5px",fontWeight:600,color:"rgba(255,255,255,0.8)"}}>{lcl(taxLocal)}</span>
                   </div>
                 )}
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                   <span style={{fontSize:"12px",fontWeight:700,color:"rgba(255,255,255,0.7)",textTransform:"uppercase",letterSpacing:"0.05em"}}>Total Amount ({currency.code})</span>
-                  <span style={{fontSize:"22px",fontWeight:900,color:"#fff"}}>{fmtC(grandLocal,sym)}</span>
+                  <span style={{fontSize:"22px",fontWeight:900,color:"#fff"}}>{lcl(grandLocal)}</span>
                 </div>
                 {currency.code!=="USD"&&<div style={{fontSize:"11px",color:"rgba(255,255,255,0.4)",textAlign:"right",marginTop:"2px"}}>≈ {fmt$(subUSD)} USD excl. tax</div>}
               </div>
@@ -1097,16 +1100,16 @@ function QuotePreview({data,onClose}){
                           Year {y.year}
                           {yearEscalation > 0 && y.year > 1 && <span style={{fontSize:"10.5px",fontWeight:600,color:"#0EA5E9",marginLeft:"6px",background:"#EFF6FF",padding:"1px 6px",borderRadius:"4px"}}>+{yearEscalation}%</span>}
                         </td>
-                        <td style={{padding:"11px 14px",textAlign:"right",color:V.muted}}>{fmtC(y.subtotal,sym)}</td>
-                        {taxConfig.rate > 0 && <td style={{padding:"11px 14px",textAlign:"right",color:V.muted}}>{fmtC(y.subtotal*taxConfig.rate,sym)}</td>}
-                        <td style={{padding:"11px 14px",textAlign:"right",fontWeight:800,color:V.ink,fontSize:"14px"}}>{fmtC(y.grand,sym)}</td>
+                        <td style={{padding:"11px 14px",textAlign:"right",color:V.muted}}>{lcl(y.subtotal)}</td>
+                        {taxConfig.rate > 0 && <td style={{padding:"11px 14px",textAlign:"right",color:V.muted}}>{lcl(y.subtotal*taxConfig.rate)}</td>}
+                        <td style={{padding:"11px 14px",textAlign:"right",fontWeight:800,color:V.ink,fontSize:"14px"}}>{lcl(y.grand)}</td>
                       </tr>
                     ))}
                   </tbody>
                   <tfoot>
                     <tr style={{background:"#0D1B3E"}}>
                       <td colSpan={taxConfig.rate > 0 ? 3 : 2} style={{padding:"12px 14px",textAlign:"right",fontWeight:700,color:"rgba(255,255,255,0.7)",fontSize:"11px",textTransform:"uppercase",letterSpacing:"0.05em"}}>Total Contract Value ({contractYears} years)</td>
-                      <td style={{padding:"12px 14px",textAlign:"right",fontWeight:900,color:"#fff",fontSize:"18px"}}>{fmtC(totalContractValue,sym)}</td>
+                      <td style={{padding:"12px 14px",textAlign:"right",fontWeight:900,color:"#fff",fontSize:"18px"}}>{lcl(totalContractValue)}</td>
                     </tr>
                   </tfoot>
                 </table>
@@ -1177,7 +1180,7 @@ function QuotePreview({data,onClose}){
             ))}
             <div style={{padding:"12px 16px",display:"flex",justifyContent:"space-between",alignItems:"center",background:"#0D1B3E"}}>
               <span style={{fontSize:"12px",fontWeight:700,color:"rgba(255,255,255,0.7)"}}>TOTAL ({currency.code})</span>
-              <span style={{fontSize:"18px",fontWeight:900,color:"#fff"}}>{fmtC(grandLocal,sym)}</span>
+              <span style={{fontSize:"18px",fontWeight:900,color:"#fff"}}>{lcl(grandLocal)}</span>
             </div>
           </div>
 
@@ -2183,7 +2186,7 @@ function QuoteHistory({ onNewQuote, onLoadQuote, user }) {
                       <td className="qh-hide" style={{ fontSize: "12px", color: V.muted }}>{q.paymentTerms || "—"}</td>
                       <td>
                         <div style={{ fontWeight: 800, color: V.ink }}>{fmt$(q.subUSD || 0)}</div>
-                        {q.currency?.code && q.currency.code !== "USD" && <div style={{ fontSize: "11px", color: V.muted }}>{q.currency.symbol}{((q.subUSD||0)*q.currency.rate).toLocaleString("en-US",{maximumFractionDigits:0})} {q.currency.code}</div>}
+                        {q.currency?.code && q.currency.code !== "USD" && <div style={{ fontSize: "11px", color: V.muted }}>{q.currency.symbol}{((q.subUSD||0)*q.currency.rate).toLocaleString(numLocale(q.currency.code),{maximumFractionDigits:0})} {q.currency.code}</div>}
                       </td>
                       <td style={{ color: V.muted, fontSize: "12px", whiteSpace: "nowrap" }}>{q.savedAt ? new Date(q.savedAt).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}) : q.createdOn || "—"}</td>
                       <td>
@@ -2596,8 +2599,8 @@ export default function QuoteBuilder({ user, onSignOut }) {
                           ["Annual List (USD)", `$${totals.annualList.toLocaleString("en-US",{minimumFractionDigits:2})}`, "#94A3B8"],
                           ["Discount (USD)",   `-$${totals.discTotal.toLocaleString("en-US",{minimumFractionDigits:2})}`, "#FCA5A5"],
                           ["Sub-Total (USD)",   `$${totals.subUSD.toLocaleString("en-US",{minimumFractionDigits:2})}`, "#E2E8F0"],
-                          currency.code !== "USD" ? [`Sub-Total (${currency.code})`, fmtC(totals.subLocal, currency.symbol), "#BAE6FD"] : null,
-                          taxConfig.rate > 0 ? [taxConfig.label, fmtC(totals.taxLocal, currency.symbol), "#FDE68A"] : null,
+                          currency.code !== "USD" ? [`Sub-Total (${currency.code})`, fmtC(totals.subLocal, currency.symbol, currency.code), "#BAE6FD"] : null,
+                          taxConfig.rate > 0 ? [taxConfig.label, fmtC(totals.taxLocal, currency.symbol, currency.code), "#FDE68A"] : null,
                         ].filter(Boolean).map(([l, v, c]) => (
                           <div key={l} style={{ display: "flex", justifyContent: "space-between", paddingBottom: "6px", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
                             <span style={{ fontSize: "12.5px", color: "rgba(255,255,255,0.5)" }}>{l}</span>
@@ -2606,7 +2609,7 @@ export default function QuoteBuilder({ user, onSignOut }) {
                         ))}
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: "4px" }}>
                           <span style={{ fontSize: "13px", fontWeight: 700, color: "rgba(255,255,255,0.7)" }}>Year 1 Total ({currency.code})</span>
-                          <span style={{ fontSize: "clamp(18px,5vw,22px)", fontWeight: 900, color: "#fff" }}>{fmtC(totals.grand, currency.symbol)}</span>
+                          <span style={{ fontSize: "clamp(18px,5vw,22px)", fontWeight: 900, color: "#fff" }}>{fmtC(totals.grand, currency.symbol, currency.code)}</span>
                         </div>
                         {contractYears > 1 && (
                           <div style={{ marginTop: "12px", borderTop: "1px solid rgba(255,255,255,0.12)", paddingTop: "12px" }}>
@@ -2614,12 +2617,12 @@ export default function QuoteBuilder({ user, onSignOut }) {
                             {yearlyTotals.map(y => (
                               <div key={y.year} style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
                                 <span style={{ fontSize: "12.5px", color: "rgba(255,255,255,0.55)" }}>Year {y.year}{yearEscalation > 0 && y.year > 1 ? ` (+${yearEscalation}%)` : ""}</span>
-                                <span style={{ fontSize: "12.5px", fontWeight: 700, color: "#93C5FD" }}>{fmtC(y.grand, currency.symbol)}</span>
+                                <span style={{ fontSize: "12.5px", fontWeight: 700, color: "#93C5FD" }}>{fmtC(y.grand, currency.symbol, currency.code)}</span>
                               </div>
                             ))}
                             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: "8px" }}>
                               <span style={{ fontSize: "12px", fontWeight: 700, color: "rgba(255,255,255,0.8)" }}>Total Contract Value</span>
-                              <span style={{ fontSize: "17px", fontWeight: 900, color: "#A78BFA" }}>{fmtC(totalContractValue, currency.symbol)}</span>
+                              <span style={{ fontSize: "17px", fontWeight: 900, color: "#A78BFA" }}>{fmtC(totalContractValue, currency.symbol, currency.code)}</span>
                             </div>
                           </div>
                         )}
