@@ -690,7 +690,7 @@ async function exportQuoteHTML({cl,annualList,discTotal,subUSD,subLocal,taxLocal
     <div style="position:absolute;right:0;top:0;opacity:0.07;pointer-events:none;">
       <svg width="300" height="150" viewBox="0 0 300 150"><circle cx="300" cy="0" r="150" fill="none" stroke="#E84B9C" stroke-width="38"/><circle cx="300" cy="0" r="100" fill="none" stroke="#F97316" stroke-width="18"/><circle cx="300" cy="0" r="60" fill="none" stroke="#0EA5E9" stroke-width="9"/></svg>
     </div>
-    <div style="display:flex;justify-content:space-between;align-items:center;padding:22px 36px 16px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:16px 36px 12px;">
       <div style="display:inline-flex;align-items:center;">${logoSVG}</div>
       <div style="text-align:right;">
         <div style="font-size:10px;color:rgba(255,255,255,0.45);letter-spacing:0.12em;text-transform:uppercase;margin-bottom:4px;">Quote Reference</div>
@@ -698,7 +698,7 @@ async function exportQuoteHTML({cl,annualList,discTotal,subUSD,subLocal,taxLocal
       </div>
     </div>
     <div style="height:1px;background:linear-gradient(90deg,transparent,rgba(232,75,156,0.6),rgba(249,115,22,0.6),transparent);margin:0 36px;"></div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:0;padding:16px 36px 24px" class="hdr-grid">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:0;padding:12px 36px 16px" class="hdr-grid">
       <div>
         <div style="font-size:10px;font-weight:700;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:6px;">Prepared For</div>
         <div style="font-size:18px;font-weight:800;color:#fff;line-height:1.2;">${customer.name||"—"}</div>
@@ -716,17 +716,17 @@ async function exportQuoteHTML({cl,annualList,discTotal,subUSD,subLocal,taxLocal
   <div style="height:4px;background:linear-gradient(90deg,#E84B9C,#F97316,#0EA5E9,#7C3AED);"></div>
 
   <!-- Body -->
-  <div class="page-body" style="padding:26px 36px;">
+  <div class="page-body" style="padding:20px 36px;">
 
     <!-- Section header -->
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
       <div style="height:1px;flex:1;background:linear-gradient(90deg,#E2E8F0,transparent);"></div>
       <span style="font-size:10px;font-weight:800;color:#94A3B8;text-transform:uppercase;letter-spacing:0.1em;white-space:nowrap;">Product &amp; Services Summary</span>
       <div style="height:1px;flex:1;background:linear-gradient(90deg,transparent,#E2E8F0);"></div>
     </div>
 
     <!-- Products table -->
-    <div class="table-wrap" style="margin-bottom:22px;"><table>
+    <div class="table-wrap" style="margin-bottom:14px;"><table>
       <thead>
         <tr style="background:#0D1B3E;">
           <th style="padding:9px 13px;text-align:left;font-weight:700;color:#fff;font-size:10px;text-transform:uppercase;letter-spacing:0.06em;">Product / Description</th>
@@ -740,7 +740,7 @@ async function exportQuoteHTML({cl,annualList,discTotal,subUSD,subLocal,taxLocal
     </table></div>
 
     <!-- Totals -->
-    <div style="display:flex;justify-content:flex-end;margin-bottom:26px;">
+    <div style="display:flex;justify-content:flex-end;margin-bottom:16px;">
       <div style="width:310px;background:#F8FAFC;border-radius:12px;overflow:hidden;border:1px solid #E2E8F0;">
         <div style="padding:13px 14px;border-bottom:1px solid #E2E8F0;">
           <div style="font-size:10px;font-weight:800;color:#94A3B8;text-transform:uppercase;letter-spacing:0.09em;margin-bottom:7px;">USD Summary</div>
@@ -770,12 +770,12 @@ async function exportQuoteHTML({cl,annualList,discTotal,subUSD,subLocal,taxLocal
 
     ${contractYears > 1 ? `
     <!-- Multi-Year Summary -->
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
       <div style="height:1px;flex:1;background:linear-gradient(90deg,#E2E8F0,transparent);"></div>
       <span style="font-size:10px;font-weight:800;color:#94A3B8;text-transform:uppercase;letter-spacing:0.1em;white-space:nowrap;">${contractYears}-Year Investment Summary</span>
       <div style="height:1px;flex:1;background:linear-gradient(90deg,transparent,#E2E8F0);"></div>
     </div>
-    <div style="border-radius:10px;overflow:hidden;border:1px solid #E2E8F0;margin-bottom:26px;">
+    <div style="border-radius:10px;overflow:hidden;border:1px solid #E2E8F0;margin-bottom:14px;">
       <table style="width:100%;border-collapse:collapse;font-size:13px;">
         <thead>
           <tr style="background:#0D1B3E;">
@@ -804,7 +804,7 @@ async function exportQuoteHTML({cl,annualList,discTotal,subUSD,subLocal,taxLocal
     </div>` : ""}
 
     <!-- Footer -->
-    <div style="display:flex;justify-content:space-between;align-items:center;padding-top:16px;border-top:1px solid #E2E8F0;margin-top:16px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;padding-top:10px;border-top:1px solid #E2E8F0;margin-top:8px;">
       <div style="font-size:10px;color:#94A3B8;">This quote is confidential and prepared exclusively for ${customer.company||"the named customer"}.</div>
       <div style="font-size:10px;color:#94A3B8;font-weight:600;">Page 1 of 2</div>
     </div>
