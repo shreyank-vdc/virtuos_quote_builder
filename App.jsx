@@ -277,6 +277,14 @@ function ProductLine({line,onUpdate,onRemove,billingCycle,startDate,endDate}){
         </div>
       </div>
       {!isPro&&item?.description&&<p style={{fontSize:"11.5px",color:"#94A3B8",margin:0}}>{item.description}</p>}
+      {isPro&&(
+        <label style={{display:"flex",alignItems:"center",gap:"7px",fontSize:"12px",color:V.muted,cursor:"pointer",userSelect:"none"}}>
+          <input type="checkbox" checked={!!line.hideRate}
+            onChange={e=>onUpdate({...line,hideRate:e.target.checked})}
+            style={{width:"14px",height:"14px",cursor:"pointer",accentColor:p?.color}}/>
+          Hide hourly rate on printed quote — show only hours &amp; total
+        </label>
+      )}
     </div>
   );
 }
@@ -410,7 +418,7 @@ async function exportQuoteWord({cl,annualList,discTotal,subUSD,subLocal,taxLocal
 
   const dataRows = cl.map(l => {
     const isPro = l.productCategory==="professional_services";
-    const unitLabel = isPro ? `${f$(l.ratePerHour||0)}/hr` : f$(l.item?.unitPrice||0);
+    const unitLabel = isPro ? (l.hideRate ? "—" : `${f$(l.ratePerHour||0)}/hr`) : f$(l.item?.unitPrice||0);
     const qtyLabel  = isPro ? `${l.qty} hrs` : `${l.qty}`;
     return new TableRow({ children: [
       cell([para([
@@ -598,8 +606,8 @@ async function exportQuoteHTML({cl,annualList,discTotal,subUSD,subLocal,taxLocal
           </div>
         </div>
       </td>
-      <td style="padding:10px 13px;text-align:right;color:#64748B;font-weight:500;border-bottom:1px solid #F1F5F9;">${l.qty}</td>
-      <td style="padding:10px 13px;text-align:right;color:#64748B;border-bottom:1px solid #F1F5F9;">${f$(l.item?.unitPrice||0)}</td>
+      <td style="padding:10px 13px;text-align:right;color:#64748B;font-weight:500;border-bottom:1px solid #F1F5F9;">${l.isPro?`${l.qty} hrs`:l.qty}</td>
+      <td style="padding:10px 13px;text-align:right;color:#64748B;border-bottom:1px solid #F1F5F9;">${l.isPro?(l.hideRate?"—":`${f$(l.ratePerHour||0)}/hr`):f$(l.item?.unitPrice||0)}</td>
       ${hasDiscount?`<td style="padding:10px 13px;text-align:right;color:${l.disc>0?"#DC2626":"#94A3B8"};border-bottom:1px solid #F1F5F9;">
         ${l.disc>0?`-${f$(l.disc)}${l.discountType==="percent"?`<div style="font-size:9.5px;color:#94A3B8">${l.discount}% off</div>`:""}`:"—"}
       </td>`:""}
@@ -1047,8 +1055,8 @@ function QuotePreview({data,onClose}){
                         </div>
                       </div>
                     </td>
-                    <td style={{padding:"11px 13px",textAlign:"right",color:V.muted,fontWeight:500}}>{l.qty}</td>
-                    <td style={{padding:"11px 13px",textAlign:"right",color:V.muted}} className="qp-table-hide">{fmt$(l.item?.unitPrice||0)}</td>
+                    <td style={{padding:"11px 13px",textAlign:"right",color:V.muted,fontWeight:500}}>{l.isPro?`${l.qty} hrs`:l.qty}</td>
+                    <td style={{padding:"11px 13px",textAlign:"right",color:V.muted}} className="qp-table-hide">{l.isPro?(l.hideRate?"—":`${fmt$(l.ratePerHour||0)}/hr`):fmt$(l.item?.unitPrice||0)}</td>
                     <td style={{padding:"11px 13px",textAlign:"right",color:l.disc>0?"#DC2626":"#94A3B8"}}>
                       {l.disc>0?`-${fmt$(l.disc)}`:"-"}
                       {l.disc>0&&l.discountType==="percent"&&<div style={{fontSize:"9.5px",color:"#94A3B8"}}>{l.discount}% off</div>}
@@ -2331,7 +2339,7 @@ export default function QuoteBuilder({ user, onSignOut }) {
 
   const addLine = cat => {
     const p = PRODUCTS[cat]; if (!p) return;
-    setLines(prev => [...prev, { productCategory: cat, itemId: p.tiers[0].id, qty: 1, discount: 0, discountType: "percent" }]);
+    setLines(prev => [...prev, { productCategory: cat, itemId: p.tiers[0].id, qty: 1, discount: 0, discountType: "percent", ratePerHour: 0, hideRate: false }]);
   };
 
   const totals = useMemo(() => {
