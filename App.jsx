@@ -290,12 +290,14 @@ function ProductLine({line,onUpdate,onRemove,billingCycle,startDate,endDate}){
 }
 
 // ─── HTML EXPORT ─────────────────────────────────────────────────────────────
-async function exportQuoteWord({cl,annualList,discTotal,subUSD,subLocal,taxLocal,grandLocal,customer,qd,currency,billingCycle,monthCount,startDate,endDate,taxConfig,paymentTerms,cats,sym,contractYears=1,yearEscalation=0,yearlyTotals=[],totalContractValue=0}) {
+async function exportQuoteWord({cl,annualList,discTotal,subUSD,subLocal,taxLocal,grandLocal,customer,qd,currency,billingCycle,monthCount,startDate,endDate,taxConfig,paymentTerms,cats,sym,contractYears=1,yearEscalation=0,yearlyTotals=[],totalContractValue=0,hideDiscount=false}) {
   const f$ = n => `$${n.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}`;
   const fC = (n,s) => `${s}${n.toLocaleString(numLocale(currency.code),{minimumFractionDigits:2,maximumFractionDigits:2})}`;
   const fD = s => s ? new Date(s).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}) : "—";
   const cycleLabel = billingCycle==="monthly"?`Monthly (${monthCount} mo)`:billingCycle==="custom"?"Custom Period":billingCycle.charAt(0).toUpperCase()+billingCycle.slice(1);
-  const hasDiscount = cl.some(l=>l.disc>0);
+  const rawHasDiscount = cl.some(l=>l.disc>0);
+  const hasDiscount = rawHasDiscount && !hideDiscount;
+  const showAnnualListPrice = !rawHasDiscount || !hideDiscount;
 
   // ── helpers ──────────────────────────────────────────────────────────────
   const NAVY = "0D1B3E", SLATE = "64748B", INK = "1E293B", BORDER_C = "CBD5E1";
@@ -582,7 +584,7 @@ async function exportQuoteWord({cl,annualList,discTotal,subUSD,subLocal,taxLocal
   setTimeout(()=>URL.revokeObjectURL(url),10000);
 }
 
-async function exportQuoteHTML({cl,annualList,discTotal,subUSD,subLocal,taxLocal,grandLocal,customer,qd,currency,billingCycle,monthCount,startDate,endDate,taxConfig,paymentTerms,cats,sym,contractYears=1,yearEscalation=0,yearlyTotals=[],totalContractValue=0}) {
+async function exportQuoteHTML({cl,annualList,discTotal,subUSD,subLocal,taxLocal,grandLocal,customer,qd,currency,billingCycle,monthCount,startDate,endDate,taxConfig,paymentTerms,cats,sym,contractYears=1,yearEscalation=0,yearlyTotals=[],totalContractValue=0,hideDiscount=false}) {
   const f$ = n => `$${n.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}`;
   const fC = (n,s) => `${s}${n.toLocaleString(numLocale(currency.code),{minimumFractionDigits:2,maximumFractionDigits:2})}`;
   const fD = s => s ? new Date(s).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}) : "—";
@@ -593,7 +595,9 @@ async function exportQuoteHTML({cl,annualList,discTotal,subUSD,subLocal,taxLocal
   const logoSVG  = LOGO_HTML(44);
   const logoSVGDark = LOGO_HTML(36);
 
-  const hasDiscount = cl.some(l=>l.disc>0);
+  const rawHasDiscount = cl.some(l=>l.disc>0);
+  const hasDiscount = rawHasDiscount && !hideDiscount;
+  const showAnnualListPrice = !rawHasDiscount || !hideDiscount;
   const tableRows = cl.map((l,i) => `
     <tr style="background:${i%2===0?"#fff":"#F8FAFC"}">
       <td style="padding:10px 13px;border-bottom:1px solid #F1F5F9;">
@@ -753,7 +757,7 @@ async function exportQuoteHTML({cl,annualList,discTotal,subUSD,subLocal,taxLocal
         <div style="padding:13px 14px;border-bottom:1px solid #E2E8F0;">
           <div style="font-size:10px;font-weight:800;color:#94A3B8;text-transform:uppercase;letter-spacing:0.09em;margin-bottom:7px;">USD Summary</div>
           <table>
-            <tr><td style="padding:3px 0;font-size:12.5px;color:#64748B;">Annual List Price</td><td style="padding:3px 0;text-align:right;font-size:12.5px;font-weight:600;color:#1E293B;">${f$(annualList)}</td></tr>
+            ${showAnnualListPrice?`<tr><td style="padding:3px 0;font-size:12.5px;color:#64748B;">Annual List Price</td><td style="padding:3px 0;text-align:right;font-size:12.5px;font-weight:600;color:#1E293B;">${f$(annualList)}</td></tr>`:""}
             ${hasDiscount?`<tr><td style="padding:3px 0;font-size:12.5px;color:#64748B;">Total Discount</td><td style="padding:3px 0;text-align:right;font-size:12.5px;font-weight:600;color:#DC2626;">-${f$(discTotal)}</td></tr>`:""}
             <tr style="border-top:1px dashed #E2E8F0;"><td style="padding:7px 0 3px;font-size:13px;font-weight:700;color:#1E293B;">Sub-Total (USD)</td><td style="padding:7px 0 3px;text-align:right;font-size:14px;font-weight:800;color:#1E293B;">${f$(subUSD)}</td></tr>
           </table>
@@ -938,7 +942,7 @@ async function exportQuoteHTML({cl,annualList,discTotal,subUSD,subLocal,taxLocal
 
 // ─── QUOTE PREVIEW / EXPORT ──────────────────────────────────────────────────
 function QuotePreview({data,onClose}){
-  const {lines,customer,qd,currency,billingCycle,monthCount,startDate,endDate,taxConfig,paymentTerms,contractYears=1,yearEscalation=0,yearlyTotals=[],totalContractValue=0}=data;
+  const {lines,customer,qd,currency,billingCycle,monthCount,startDate,endDate,taxConfig,paymentTerms,contractYears=1,yearEscalation=0,yearlyTotals=[],totalContractValue=0,hideDiscount=false}=data;
   const sym=currency.symbol;
   const lcl = n => fmtC(n, sym, currency.code);
   const cl=computeLines(lines,startDate,endDate,billingCycle);
@@ -951,6 +955,9 @@ function QuotePreview({data,onClose}){
   const grandLocal  = subLocal+taxLocal;
 
   const cats=[...new Set(lines.map(l=>l.productCategory))];
+  const rawHasDiscount = cl.some(l=>l.disc>0);
+  const hasDiscount = rawHasDiscount && !hideDiscount;
+  const showAnnualListPrice = !rawHasDiscount || !hideDiscount;
 
   const sectionHeader = (txt) => (
     <div style={{display:"flex",alignItems:"center",gap:"10px",margin:"0 0 14px"}}>
@@ -1029,7 +1036,7 @@ function QuotePreview({data,onClose}){
           <div style={{overflowX:"auto",marginBottom:"24px",borderRadius:"10px",border:"1px solid #E2E8F0"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:"clamp(10px,1.5vw,12.5px)",minWidth:"480px"}}>
             <thead>
               <tr style={{background:"#0D1B3E"}}>
-                {["Product / Description","Qty","Unit Price (USD/yr)","Discount","Net Amount (USD)"].map((h,i)=>(
+                {["Product / Description","Qty","Unit Price (USD/yr)",...(hasDiscount?["Discount"]:[]),"Net Amount (USD)"].map((h,i)=>(
                   <th key={h} style={{padding:"10px 13px",textAlign:i===0?"left":"right",fontWeight:700,color:"#fff",fontSize:"10px",textTransform:"uppercase",letterSpacing:"0.06em",whiteSpace:"nowrap"}} className={h==="Unit Price (USD/yr)"?"qp-table-hide":""}>
                     {h}
                   </th>
@@ -1057,10 +1064,12 @@ function QuotePreview({data,onClose}){
                     </td>
                     <td style={{padding:"11px 13px",textAlign:"right",color:V.muted,fontWeight:500}}>{l.isPro?`${l.qty} hrs`:l.qty}</td>
                     <td style={{padding:"11px 13px",textAlign:"right",color:V.muted}} className="qp-table-hide">{l.isPro?(l.hideRate?"—":`${fmt$(l.ratePerHour||0)}/hr`):fmt$(l.item?.unitPrice||0)}</td>
-                    <td style={{padding:"11px 13px",textAlign:"right",color:l.disc>0?"#DC2626":"#94A3B8"}}>
-                      {l.disc>0?`-${fmt$(l.disc)}`:"-"}
-                      {l.disc>0&&l.discountType==="percent"&&<div style={{fontSize:"9.5px",color:"#94A3B8"}}>{l.discount}% off</div>}
-                    </td>
+                    {hasDiscount&&(
+                      <td style={{padding:"11px 13px",textAlign:"right",color:l.disc>0?"#DC2626":"#94A3B8"}}>
+                        {l.disc>0?`-${fmt$(l.disc)}`:"-"}
+                        {l.disc>0&&l.discountType==="percent"&&<div style={{fontSize:"9.5px",color:"#94A3B8"}}>{l.discount}% off</div>}
+                      </td>
+                    )}
                     <td style={{padding:"11px 13px",textAlign:"right",fontWeight:800,color:V.ink,fontSize:"14px"}}>{fmt$(l.net)}</td>
                   </tr>
                 );
@@ -1075,8 +1084,8 @@ function QuotePreview({data,onClose}){
               <div style={{padding:"14px 16px",borderBottom:"1px solid #E2E8F0"}}>
                 <div style={{fontSize:"10px",fontWeight:800,color:"#94A3B8",textTransform:"uppercase",letterSpacing:"0.09em",marginBottom:"8px"}}>USD Summary</div>
                 {[
-                  ["Annual List Price", fmt$(annualList)],
-                  ["Total Discount",    `-${fmt$(discTotal)}`, "#DC2626"],
+                  ...(showAnnualListPrice?[["Annual List Price", fmt$(annualList)]]:[]),
+                  ...(hasDiscount?[["Total Discount", `-${fmt$(discTotal)}`, "#DC2626"]]:[]),
                 ].map(([l,v,c])=>(
                   <div key={l} style={{display:"flex",justifyContent:"space-between",padding:"3px 0"}}>
                     <span style={{fontSize:"12.5px",color:V.muted}}>{l}</span>
@@ -1295,11 +1304,11 @@ function QuotePreview({data,onClose}){
         {/* Modal action bar */}
         <div className="qp-action-bar">
           <button onClick={onClose} style={{padding:"9px 20px",border:`1.5px solid ${V.border}`,borderRadius:"8px",background:"#fff",cursor:"pointer",fontSize:"13px",fontWeight:600,color:V.ink,fontFamily:"inherit"}}>Close</button>
-          <button onClick={()=>exportQuoteWord({cl,annualList,discTotal,subUSD,subLocal,taxLocal,grandLocal,customer,qd,currency,billingCycle,monthCount,startDate,endDate,taxConfig,paymentTerms,cats,sym,contractYears,yearEscalation,yearlyTotals,totalContractValue})}
+          <button onClick={()=>exportQuoteWord({cl,annualList,discTotal,subUSD,subLocal,taxLocal,grandLocal,customer,qd,currency,billingCycle,monthCount,startDate,endDate,taxConfig,paymentTerms,cats,sym,contractYears,yearEscalation,yearlyTotals,totalContractValue,hideDiscount})}
             style={{padding:"9px 22px",background:"linear-gradient(135deg,#1D4ED8,#2563EB)",color:"#fff",border:"none",borderRadius:"8px",cursor:"pointer",fontSize:"13px",fontWeight:700,boxShadow:"0 4px 12px rgba(29,78,216,0.35)",fontFamily:"inherit"}}>
             📄 Export Word (.doc)
           </button>
-          <button onClick={()=>exportQuoteHTML({cl,annualList,discTotal,subUSD,subLocal,taxLocal,grandLocal,customer,qd,currency,billingCycle,monthCount,startDate,endDate,taxConfig,paymentTerms,cats,sym,contractYears,yearEscalation,yearlyTotals,totalContractValue})}
+          <button onClick={()=>exportQuoteHTML({cl,annualList,discTotal,subUSD,subLocal,taxLocal,grandLocal,customer,qd,currency,billingCycle,monthCount,startDate,endDate,taxConfig,paymentTerms,cats,sym,contractYears,yearEscalation,yearlyTotals,totalContractValue,hideDiscount})}
             style={{padding:"9px 22px",background:"linear-gradient(135deg,#0D1B3E,#1A2C55)",color:"#fff",border:"none",borderRadius:"8px",cursor:"pointer",fontSize:"13px",fontWeight:700,boxShadow:"0 4px 12px rgba(13,27,62,0.35)",fontFamily:"inherit"}}>
             🖨 Export / Print PDF
           </button>
@@ -2275,6 +2284,7 @@ export default function QuoteBuilder({ user, onSignOut }) {
   const [taxConfig,      setTaxConfig]      = useState(TAX_RATES[0]);
   const [contractYears,  setContractYears]  = useState(1);
   const [yearEscalation, setYearEscalation] = useState(0);
+  const [hideDiscount,   setHideDiscount]   = useState(false);
   const [showPreview,    setShowPreview]    = useState(false);
 
   useEffect(() => {
@@ -2308,6 +2318,7 @@ export default function QuoteBuilder({ user, onSignOut }) {
     setQd({ quoteId: generateQuoteId(), quoteName: "", createdOn: new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}), owner: "", notes: "", validUntil: "" });
     setCurrency(CURRENCIES[0]); setBillingCycle("annual"); setMonthCount(12);
     setStartDate(today); setEndDate(autoEndDate(today,"annual",12)); setTaxConfig(TAX_RATES[0]);
+    setContractYears(1); setYearEscalation(0); setHideDiscount(false);
   }
 
   function saveCurrentQuote() {
@@ -2318,6 +2329,7 @@ export default function QuoteBuilder({ user, onSignOut }) {
       owner: qd.owner || user?.user_metadata?.full_name || user?.email, notes: qd.notes,
       customer, currency, billingCycle, monthCount, startDate, endDate, taxConfig, paymentTerms,
       lines, subUSD, grandLocal: subUSD * currency.rate, accountId,
+      contractYears, yearEscalation, hideDiscount,
     };
     upsertQuote(snapshot, user, accountId);
   }
@@ -2334,6 +2346,9 @@ export default function QuoteBuilder({ user, onSignOut }) {
     setStartDate(q.startDate || today);
     setEndDate(q.endDate || autoEndDate(today, "annual", 12));
     setTaxConfig(q.taxConfig || TAX_RATES[0]);
+    setContractYears(q.contractYears || 1);
+    setYearEscalation(q.yearEscalation || 0);
+    setHideDiscount(!!q.hideDiscount);
     setView("builder");
   }
 
@@ -2590,6 +2605,12 @@ export default function QuoteBuilder({ user, onSignOut }) {
                     )}
                     <Sel label="Tax" value={taxConfig.label} onChange={v => setTaxConfig(TAX_RATES.find(t => t.label === v))}
                       options={TAX_RATES.map(t => ({ value: t.label, label: t.label }))}/>
+                    <label style={{display:"flex",alignItems:"center",gap:"7px",fontSize:"12px",color:V.muted,cursor:"pointer",userSelect:"none",marginTop:"2px"}}>
+                      <input type="checkbox" checked={hideDiscount}
+                        onChange={e=>setHideDiscount(e.target.checked)}
+                        style={{width:"14px",height:"14px",cursor:"pointer",accentColor:V.pink}}/>
+                      Hide discount % / value on printed quote
+                    </label>
                   </Panel>
 
                   <Panel title="Notes" icon="📝">
@@ -2680,7 +2701,7 @@ export default function QuoteBuilder({ user, onSignOut }) {
 
       {showPreview && (
         <QuotePreview
-          data={{ lines, customer, qd, currency, billingCycle, monthCount, startDate, endDate, taxConfig, paymentTerms, contractYears, yearEscalation, yearlyTotals, totalContractValue }}
+          data={{ lines, customer, qd, currency, billingCycle, monthCount, startDate, endDate, taxConfig, paymentTerms, contractYears, yearEscalation, yearlyTotals, totalContractValue, hideDiscount }}
           onClose={() => setShowPreview(false)}/>
       )}
     </div>
