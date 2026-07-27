@@ -26,8 +26,13 @@ An internal quote/proposal generator for **Virtuos Digital**, a reseller of Asan
   - Page 2: Terms & Conditions, quote summary, and signature/acceptance blocks
 - **Word (.docx)** — generated in-browser, mirrors the PDF structure including multi-year tables
 
-### Customer & Account Management (CRM-lite)
-- `accounts` and `contacts` tables for tracking customers tied to quotes
+### Light CRM (Attio-style spreadsheet UI)
+- **Leads** — capture prospects (name, company, title, email, phone, source, status). One-click **Convert** turns a lead into a Contact + Opportunity, auto-creating/matching the Company.
+- **Contacts** — people at customer/prospect companies, with an inline linked-record picker for Company (search existing or create new on the fly).
+- **Opportunities** — deal pipeline (New → Qualified → Demo/Discovery → Proposal Sent → Negotiation → Closed Won/Lost). Deal value auto-syncs from any Quotes linked to the opportunity; falls back to a manually entered value until a quote exists.
+- All three are rendered with a shared `DataGrid` component: click-to-edit cells, Tab/Enter to move between fields, sortable columns, checkbox multi-select + bulk delete, and an "Add row" affordance — modeled after Attio's table view.
+- Home dashboard surfaces open leads, open opportunities, open pipeline value (USD), and recent opportunities alongside the existing quote widgets.
+- Backing tables: `accounts`, `contacts`, `leads`, `opportunities`; `quotes.opportunity_id` links a quote to its deal.
 
 ### Role-Based Access Control (RBAC)
 Roles: `admin`, `hr_admin`, `manager`, `contributor`
@@ -53,6 +58,7 @@ logoData.js       Brand assets (SVG logo data)
 main.jsx         React entry point
 supabase_phase2_migration.sql   accounts/contacts/quotes schema
 supabase_phase3_rbac.sql        user_profiles, role enum, RLS policies
+supabase_phase4_crm.sql         leads, opportunities, contacts CRM fields, quotes.opportunity_id
 vercel.json      Vercel build/deploy config (SPA rewrites)
 ```
 
@@ -69,6 +75,10 @@ Requires Supabase project credentials (URL + anon key) configured in `supabase.j
 
 ## Recent Changes
 
+- Added a light CRM module — **Leads**, **Contacts**, **Opportunities** — with an Attio-style inline-editable spreadsheet UI, lead-to-opportunity conversion, and pipeline value that syncs from linked quotes. Replaced the old standalone Accounts page.
+- Added a checkbox to hide the discount % / total discount value on printed quotes, per-quote
+- Added a per-line checkbox on Professional Services items to hide the hourly rate on printed quotes, showing only hours & total
+- Added the **Smartsheet Data Mesh** add-on ($12,700/yr flat)
 - Re-added the **Smartsheet Enterprise with Premium Support** SKU ($540/user/yr) after it was accidentally dropped in a merge
 - Restored multi-year quote support, INR formatting, and other features lost in a bad merge — now consolidated on `main`
 - Fixed PDF export layout: moved Terms & Conditions and the signature/acceptance section onto page 2 (previously on page 1), which was causing content to overflow onto a near-blank extra page

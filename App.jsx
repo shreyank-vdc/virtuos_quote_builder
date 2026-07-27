@@ -1408,6 +1408,137 @@ async function fetchAccountQuotes(accountId) {
   return (data || []).map(r => ({ ...r.payload, id: r.id, savedAt: r.saved_at, ownerEmail: r.owner_email, ownerName: r.owner_name }));
 }
 
+async function getOrCreateAccountByName(name, user) {
+  const trimmed = (name||"").trim();
+  if (!trimmed) return null;
+  const { data: existing } = await supabase.from("accounts").select("id,name").ilike("name", trimmed).limit(1);
+  if (existing && existing.length) return existing[0];
+  const { data, error } = await supabase.from("accounts").insert({ name: trimmed, created_by: user.id, owner_id: user.id }).select().single();
+  if (error) { console.error(error); return null; }
+  return data;
+}
+
+// ─── CRM: LEADS API ────────────────────────────────────────────────────────────
+const LEAD_STATUS_META = {
+  new:          { label: "New",          color: "#0EA5E9" },
+  contacted:    { label: "Contacted",    color: "#F59E0B" },
+  qualified:    { label: "Qualified",    color: "#10B981" },
+  disqualified: { label: "Disqualified", color: "#EF4444" },
+  converted:    { label: "Converted",    color: "#7C3AED" },
+};
+const LEAD_STATUS_OPTIONS = Object.entries(LEAD_STATUS_META).map(([value,m]) => ({ value, label: m.label }));
+const LEAD_SOURCES = ["Website","Referral","LinkedIn","Cold Outreach","Event","Partner","Other"];
+
+async function fetchAllLeads() {
+  const { data, error } = await supabase.from("leads").select("*").order("created_at", { ascending: false });
+  if (error) { console.error(error); return []; }
+  return data || [];
+}
+async function insertLead(user) {
+  const { data, error } = await supabase.from("leads").insert({ name: "New Lead", status: "new", owner_id: user.id, created_by: user.id }).select().single();
+  if (error) { console.error(error); return null; }
+  return data;
+}
+async function updateLead(id, patch) {
+  const { error } = await supabase.from("leads").update({ ...patch, updated_at: new Date().toISOString() }).eq("id", id);
+  if (error) console.error(error);
+}
+async function deleteLeads(ids) {
+  const { error } = await supabase.from("leads").delete().in("id", ids);
+  if (error) console.error(error);
+}
+async function convertLead(lead, user) {
+  let accountId = null;
+  if (lead.company && lead.company.trim()) {
+    const acc = await getOrCreateAccountByName(lead.company.trim(), user);
+    accountId = acc?.id || null;
+  }
+  const { data: contact, error: cErr } = await supabase.from("contacts").insert({
+    account_id: accountId, name: lead.name, email: lead.email || null, phone: lead.phone || null,
+    designation: lead.title || null, source: lead.source || null, owner_id: user.id, created_by: user.id,
+  }).select().single();
+  if (cErr) { console.error(cErr); throw new Error(cErr.message); }
+
+  const { data: opp, error: oErr } = await supabase.from("opportunities").insert({
+    name: `${lead.company || lead.name} — Opportunity`, account_id: accountId, primary_contact_id: contact.id,
+    stage: "new", value_usd: 0, owner_id: user.id, created_by: user.id,
+  }).select().single();
+  if (oErr) { console.error(oErr); throw new Error(oErr.message); }
+
+  await supabase.from("leads").update({
+    status: "converted", converted_contact_id: contact.id, converted_opportunity_id: opp.id, updated_at: new Date().toISOString(),
+  }).eq("id", lead.id);
+
+  return { contact, opportunity: opp };
+}
+
+// ─── CRM: CONTACTS API (standalone spreadsheet) ────────────────────────────────
+async function fetchAllContacts() {
+  const { data, error } = await supabase.from("contacts").select("*, accounts(id,name)").order("created_at", { ascending: false });
+  if (error) { console.error(error); return []; }
+  return (data || []).map(c => ({ ...c, company_name: c.accounts?.name || "" }));
+}
+async function insertContact(user) {
+  const { data, error } = await supabase.from("contacts").insert({ name: "New Contact", owner_id: user.id, created_by: user.id }).select("*, accounts(id,name)").single();
+  if (error) { console.error(error); return null; }
+  return { ...data, company_name: data.accounts?.name || "" };
+}
+async function updateContact(id, patch) {
+  const { error } = await supabase.from("contacts").update({ ...patch, updated_at: new Date().toISOString() }).eq("id", id);
+  if (error) console.error(error);
+}
+async function deleteContacts(ids) {
+  const { error } = await supabase.from("contacts").delete().in("id", ids);
+  if (error) console.error(error);
+}
+
+// ─── CRM: OPPORTUNITIES API ────────────────────────────────────────────────────
+const OPP_STAGE_META = {
+  new:         { label: "New",             color: "#94A3B8" },
+  qualified:   { label: "Qualified",       color: "#0EA5E9" },
+  demo:        { label: "Demo / Discovery",color: "#6366F1" },
+  proposal:    { label: "Proposal Sent",   color: "#F59E0B" },
+  negotiation: { label: "Negotiation",     color: "#F97316" },
+  closed_won:  { label: "Closed Won",      color: "#10B981" },
+  closed_lost: { label: "Closed Lost",     color: "#EF4444" },
+};
+const OPP_STAGE_OPTIONS = Object.entries(OPP_STAGE_META).map(([value,m]) => ({ value, label: m.label }));
+
+async function fetchAllOpportunities() {
+  const { data, error } = await supabase.from("opportunities").select("*, accounts(id,name), contacts(id,name)").order("created_at", { ascending: false });
+  if (error) { console.error(error); return []; }
+  return (data || []).map(o => ({ ...o, company_name: o.accounts?.name || "", contact_name: o.contacts?.name || "" }));
+}
+async function insertOpportunity(user) {
+  const { data, error } = await supabase.from("opportunities").insert({ name: "New Opportunity", stage: "new", value_usd: 0, owner_id: user.id, created_by: user.id }).select("*, accounts(id,name), contacts(id,name)").single();
+  if (error) { console.error(error); return null; }
+  return { ...data, company_name: data.accounts?.name || "", contact_name: data.contacts?.name || "" };
+}
+async function updateOpportunity(id, patch) {
+  const { error } = await supabase.from("opportunities").update({ ...patch, updated_at: new Date().toISOString() }).eq("id", id);
+  if (error) console.error(error);
+}
+async function deleteOpportunities(ids) {
+  const { error } = await supabase.from("opportunities").delete().in("id", ids);
+  if (error) console.error(error);
+}
+async function fetchOpportunityQuoteTotals() {
+  const { data } = await supabase.from("quotes").select("opportunity_id, payload").not("opportunity_id", "is", null);
+  const map = {};
+  (data || []).forEach(r => {
+    if (!r.opportunity_id) return;
+    const usd = r.payload?.subUSD || 0;
+    if (!map[r.opportunity_id]) map[r.opportunity_id] = { sum: 0, count: 0 };
+    map[r.opportunity_id].sum += usd;
+    map[r.opportunity_id].count += 1;
+  });
+  return map;
+}
+async function fetchQuotesForOpportunity(oppId) {
+  const { data } = await supabase.from("quotes").select("id, payload, saved_at").eq("opportunity_id", oppId).order("saved_at", { ascending: false });
+  return (data || []).map(r => ({ ...r.payload, id: r.id, savedAt: r.saved_at }));
+}
+
 // ─── ACCOUNT COMBOBOX ─────────────────────────────────────────────────────────
 const INDUSTRIES = ["Technology","BFSI","Retail","Manufacturing","Healthcare","Education","Media & Entertainment","Government","Real Estate","Logistics","Other"];
 const COUNTRIES  = ["India","United States","United Kingdom","UAE","Singapore","Australia","Germany","France","Japan","Canada","Other"];
@@ -1583,188 +1714,511 @@ function AccountDrawer({ initialName, user, onSave, onClose }) {
   );
 }
 
-// ─── ACCOUNTS VIEW ────────────────────────────────────────────────────────────
-function AccountsView({ onLoadQuote, user }) {
-  const [accounts,      setAccounts]      = useState([]);
-  const [loading,       setLoading]       = useState(true);
-  const [search,        setSearch]        = useState("");
-  const [selected,      setSelected]      = useState(null);
-  const [acctQuotes,    setAcctQuotes]    = useState([]);
-  const [quotesLoading, setQuotesLoading] = useState(false);
-  const [showDrawer,    setShowDrawer]    = useState(false);
+// ─── RECORD PICKER (inline linked-record cell, Attio-style) ───────────────────
+function RecordPicker({ value, displayValue, search, onPick, onCreate, placeholder="Search or create…", createLabel="Create", clearable=true }) {
+  const [open, setOpen]       = useState(false);
+  const [query, setQuery]     = useState("");
+  const [results, setResults] = useState([]);
+  const ref = useRef(null);
 
-  const reload = useCallback(() => {
-    setLoading(true);
-    fetchAllAccounts().then(a => { setAccounts(a); setLoading(false); });
+  useEffect(() => {
+    function away(e) { if (ref.current && !ref.current.contains(e.target)) setOpen(false); }
+    document.addEventListener("mousedown", away);
+    return () => document.removeEventListener("mousedown", away);
   }, []);
 
-  useEffect(() => { reload(); }, [reload]);
+  useEffect(() => {
+    if (!open) return;
+    const t = setTimeout(() => { search(query).then(setResults); }, 180);
+    return () => clearTimeout(t);
+  }, [query, open]);
 
-  function openAccount(acc) {
-    setSelected(acc); setQuotesLoading(true);
-    fetchAccountQuotes(acc.id).then(q => { setAcctQuotes(q); setQuotesLoading(false); });
+  return (
+    <div ref={ref} style={{ position: "relative" }}>
+      <div onClick={() => { setOpen(o => !o); setQuery(""); }}
+        style={{ cursor: "pointer", fontSize: "13px", color: displayValue ? V.ink : "#CBD5E1", fontWeight: displayValue ? 600 : 400, padding: "2px 0" }}>
+        {displayValue || "— Select —"}
+      </div>
+      {open && (
+        <div style={{ position: "absolute", top: "100%", left: 0, zIndex: 250, background: "#fff", border: `1.5px solid ${V.border}`, borderRadius: "10px", boxShadow: "0 8px 28px rgba(0,0,0,0.15)", width: "230px", marginTop: "4px", overflow: "hidden" }}>
+          <input autoFocus value={query} onChange={e => setQuery(e.target.value)} placeholder={placeholder}
+            style={{ ...IS, border: "none", borderBottom: `1px solid ${V.border}`, borderRadius: 0 }}
+            onClick={e => e.stopPropagation()}/>
+          <div style={{ maxHeight: "200px", overflowY: "auto" }}>
+            {results.map(r => (
+              <div key={r.id} onMouseDown={() => { onPick(r); setOpen(false); }}
+                style={{ padding: "9px 13px", cursor: "pointer", fontSize: "12.5px", color: V.ink }}
+                onMouseEnter={e => e.currentTarget.style.background = "#F8FAFC"}
+                onMouseLeave={e => e.currentTarget.style.background = "#fff"}>
+                {r.label}
+              </div>
+            ))}
+            {results.length === 0 && !query.trim() && (
+              <div style={{ padding: "12px 13px", fontSize: "12px", color: V.muted }}>Type to search…</div>
+            )}
+            {query.trim() && onCreate && (
+              <div onMouseDown={() => { onCreate(query.trim()); setOpen(false); }}
+                style={{ padding: "9px 13px", cursor: "pointer", fontSize: "12.5px", color: V.pink, fontWeight: 700, borderTop: results.length ? `1px solid ${V.border}` : "none" }}
+                onMouseEnter={e => e.currentTarget.style.background = "#FFF0F8"}
+                onMouseLeave={e => e.currentTarget.style.background = "#fff"}>
+                + {createLabel} "{query.trim()}"
+              </div>
+            )}
+            {clearable && value && (
+              <div onMouseDown={() => { onPick(null); setOpen(false); }}
+                style={{ padding: "8px 13px", cursor: "pointer", fontSize: "11.5px", color: "#94A3B8", borderTop: `1px solid ${V.border}` }}
+                onMouseEnter={e => e.currentTarget.style.background = "#F8FAFC"}
+                onMouseLeave={e => e.currentTarget.style.background = "#fff"}>
+                Clear
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── DATA GRID (Attio-style spreadsheet table) ─────────────────────────────────
+function isColEditable(col, row) {
+  if (col.type === "picker") return false;
+  return typeof col.editable === "function" ? col.editable(row) : col.editable !== false;
+}
+
+function DataGrid({ columns, rows, onCellCommit, onAddRow, onDeleteRows, addLabel="+ Add row", emptyIcon="▦", emptyTitle="No records yet", emptySub="" }) {
+  const [editing, setEditing]   = useState(null); // {rowId, key}
+  const [draft, setDraft]       = useState("");
+  const [selected, setSelected] = useState(new Set());
+  const [sort, setSort]         = useState(null); // {key, dir}
+  const [adding, setAdding]     = useState(false);
+
+  function startEdit(row, col) {
+    setEditing({ rowId: row.id, key: col.key });
+    setDraft(row[col.key] ?? "");
+  }
+  function cancelEdit() { setEditing(null); setDraft(""); }
+
+  async function commitEdit(moveNext) {
+    if (!editing) return;
+    const { rowId, key } = editing;
+    const col = columns.find(c => c.key === key);
+    let value = draft;
+    if (col?.type === "select" && col.options) {
+      const opt = col.options.find(o => String(o.value) === String(draft));
+      if (opt) value = opt.value;
+    }
+    await onCellCommit(rowId, key, value);
+    if (moveNext) {
+      const row = rows.find(r => r.id === rowId);
+      if (row) {
+        const rowEditableCols = columns.filter(c => isColEditable(c, row));
+        const colIdx = rowEditableCols.findIndex(c => c.key === key);
+        const nextCol = rowEditableCols[colIdx + 1];
+        if (nextCol) { setEditing({ rowId, key: nextCol.key }); setDraft(row[nextCol.key] ?? ""); return; }
+        const rowIdx = rows.findIndex(r => r.id === rowId);
+        const nextRow = rows[rowIdx + 1];
+        const firstCol = nextRow && columns.find(c => isColEditable(c, nextRow));
+        if (nextRow && firstCol) { setEditing({ rowId: nextRow.id, key: firstCol.key }); setDraft(nextRow[firstCol.key] ?? ""); return; }
+      }
+    }
+    setEditing(null);
   }
 
-  const filtered = accounts.filter(a => {
-    const s = search.toLowerCase();
-    return !s || a.name.toLowerCase().includes(s) || (a.industry||"").toLowerCase().includes(s) || (a.country||"").toLowerCase().includes(s);
-  });
+  const sortedRows = useMemo(() => {
+    if (!sort) return rows;
+    const col = columns.find(c => c.key === sort.key);
+    return [...rows].sort((a, b) => {
+      let av = a[sort.key], bv = b[sort.key];
+      if (col?.type === "currency" || col?.type === "number") {
+        av = parseFloat(av) || 0; bv = parseFloat(bv) || 0;
+        return sort.dir === "asc" ? av - bv : bv - av;
+      }
+      av = (av ?? "").toString().toLowerCase(); bv = (bv ?? "").toString().toLowerCase();
+      return sort.dir === "asc" ? av.localeCompare(bv) : bv.localeCompare(av);
+    });
+  }, [rows, sort, columns]);
 
-  if (selected) {
-    return (
-      <div style={{ padding: "28px 32px", maxWidth: "960px" }}>
-        <button onClick={() => setSelected(null)}
-          style={{ display: "inline-flex", alignItems: "center", gap: "6px", background: "none", border: "none", color: V.muted, cursor: "pointer", fontSize: "13px", fontFamily: "inherit", marginBottom: "20px", padding: 0 }}>
-          ← Back to Accounts
-        </button>
+  function toggleSort(key) { setSort(s => (s?.key === key ? (s.dir === "asc" ? { key, dir: "desc" } : null) : { key, dir: "asc" })); }
+  function toggleSel(id) { setSelected(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; }); }
+  function toggleAll() { setSelected(s => (s.size === sortedRows.length ? new Set() : new Set(sortedRows.map(r => r.id)))); }
 
-        {/* Account header */}
-        <div style={{ background: "linear-gradient(135deg,#0D1B3E,#1A2C55)", borderRadius: "16px", padding: "24px 28px", color: "#fff", marginBottom: "18px" }}>
-          <div style={{ fontSize: "22px", fontWeight: 800, marginBottom: "8px" }}>{selected.name}</div>
-          <div style={{ display: "flex", gap: "18px", flexWrap: "wrap" }}>
-            {selected.industry && <span style={{ fontSize: "12px", color: "rgba(255,255,255,0.5)", display: "flex", alignItems: "center", gap: "5px" }}>⬡ {selected.industry}</span>}
-            {selected.country  && <span style={{ fontSize: "12px", color: "rgba(255,255,255,0.5)" }}>📍 {selected.country}</span>}
-            {selected.website  && <a href={selected.website} target="_blank" rel="noreferrer" style={{ fontSize: "12px", color: "#93C5FD" }}>{selected.website}</a>}
-          </div>
-          {selected.notes && <div style={{ marginTop: "12px", fontSize: "12.5px", color: "rgba(255,255,255,0.4)", fontStyle: "italic" }}>{selected.notes}</div>}
-        </div>
+  async function handleAdd() {
+    setAdding(true);
+    try {
+      const row = await onAddRow();
+      if (row) {
+        const firstCol = columns.find(c => isColEditable(c, row));
+        if (firstCol) { setEditing({ rowId: row.id, key: firstCol.key }); setDraft(""); }
+      }
+    } finally { setAdding(false); }
+  }
 
-        {/* Contacts */}
-        <div style={{ background: "#fff", borderRadius: "12px", border: `1px solid ${V.border}`, overflow: "hidden", marginBottom: "16px" }}>
-          <div style={{ padding: "14px 20px", borderBottom: `1px solid ${V.border}`, fontSize: "11px", fontWeight: 800, color: V.ink, textTransform: "uppercase", letterSpacing: "0.07em" }}>
-            Contacts · {(selected.contacts||[]).length}
-          </div>
-          {(selected.contacts||[]).length === 0 ? (
-            <div style={{ padding: "24px 20px", textAlign: "center", color: V.muted, fontSize: "13px" }}>No contacts on record</div>
-          ) : (
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead>
-                <tr style={{ background: "#F8FAFC" }}>
-                  {["Name","Designation","Email","Phone"].map(h => (
-                    <th key={h} style={{ padding: "9px 18px", textAlign: "left", fontSize: "10.5px", fontWeight: 700, color: V.muted, textTransform: "uppercase", letterSpacing: "0.06em", borderBottom: `1px solid ${V.border}` }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {(selected.contacts||[]).map(c => (
-                  <tr key={c.id} style={{ borderBottom: `1px solid ${V.border}` }}>
-                    <td style={{ padding: "11px 18px" }}>
-                      <div style={{ fontWeight: 600, fontSize: "13px", color: V.ink, display: "flex", alignItems: "center", gap: "7px" }}>
-                        {c.name}
-                        {c.is_primary && <span style={{ fontSize: "9px", fontWeight: 700, background: "#E84B9C18", color: "#E84B9C", padding: "1px 7px", borderRadius: "99px", textTransform: "uppercase" }}>Primary</span>}
-                      </div>
-                    </td>
-                    <td style={{ padding: "11px 18px", fontSize: "12px", color: V.muted }}>{c.designation || "—"}</td>
-                    <td style={{ padding: "11px 18px", fontSize: "12px", color: V.muted }}>{c.email || "—"}</td>
-                    <td style={{ padding: "11px 18px", fontSize: "12px", color: V.muted }}>{c.phone || "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-
-        {/* Quote history */}
-        <div style={{ background: "#fff", borderRadius: "12px", border: `1px solid ${V.border}`, overflow: "hidden" }}>
-          <div style={{ padding: "14px 20px", borderBottom: `1px solid ${V.border}`, fontSize: "11px", fontWeight: 800, color: V.ink, textTransform: "uppercase", letterSpacing: "0.07em" }}>Quote History</div>
-          {quotesLoading ? (
-            <div style={{ padding: "24px 20px", textAlign: "center", color: V.muted, fontSize: "13px" }}>Loading…</div>
-          ) : acctQuotes.length === 0 ? (
-            <div style={{ padding: "24px 20px", textAlign: "center", color: V.muted, fontSize: "13px" }}>No quotes linked to this account yet</div>
-          ) : (
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead>
-                <tr style={{ background: "#F8FAFC" }}>
-                  {["Quote ID","Name","Value (USD)","Date","Owner"].map(h => (
-                    <th key={h} style={{ padding: "9px 18px", textAlign: "left", fontSize: "10.5px", fontWeight: 700, color: V.muted, textTransform: "uppercase", letterSpacing: "0.06em", borderBottom: `1px solid ${V.border}` }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {acctQuotes.map(q => (
-                  <tr key={q.id} style={{ borderBottom: `1px solid ${V.border}`, cursor: "pointer" }}
-                    onMouseEnter={e => e.currentTarget.style.background = "#F8FAFC"}
-                    onMouseLeave={e => e.currentTarget.style.background = "#fff"}
-                    onClick={() => onLoadQuote(q)}>
-                    <td style={{ padding: "11px 18px", fontFamily: "monospace", fontSize: "11.5px", color: V.muted }}>{q.id}</td>
-                    <td style={{ padding: "11px 18px", fontSize: "13px", fontWeight: 600, color: V.ink }}>{q.quoteName || "—"}</td>
-                    <td style={{ padding: "11px 18px", fontSize: "13px", color: V.ink }}>${(q.subUSD||0).toLocaleString("en-US",{minimumFractionDigits:2})}</td>
-                    <td style={{ padding: "11px 18px", fontSize: "12px", color: V.muted }}>{q.savedAt ? new Date(q.savedAt).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}) : "—"}</td>
-                    <td style={{ padding: "11px 18px", fontSize: "12px", color: V.muted }}>{q.owner || q.ownerName || "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-      </div>
-    );
+  async function handleDeleteSelected() {
+    if (!selected.size) return;
+    if (!window.confirm(`Delete ${selected.size} record(s)? This cannot be undone.`)) return;
+    await onDeleteRows([...selected]);
+    setSelected(new Set());
   }
 
   return (
-    <div style={{ padding: "28px 32px" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "22px", gap: "12px", flexWrap: "wrap" }}>
-        <div>
-          <div style={{ fontSize: "20px", fontWeight: 800, color: V.navy }}>Accounts</div>
-          <div style={{ fontSize: "12px", color: V.muted, marginTop: "2px" }}>Customer database</div>
+    <div style={{ background: "#fff", borderRadius: "12px", border: `1px solid ${V.border}`, overflow: "hidden" }}>
+      {selected.size > 0 && (
+        <div style={{ padding: "9px 16px", background: "#FEF2F2", borderBottom: `1px solid ${V.border}`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <span style={{ fontSize: "12.5px", color: "#DC2626", fontWeight: 700 }}>{selected.size} selected</span>
+          <button onClick={handleDeleteSelected}
+            style={{ background: "#DC2626", color: "#fff", border: "none", padding: "5px 13px", borderRadius: "6px", fontSize: "12px", fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+            Delete
+          </button>
         </div>
-        <button onClick={() => setShowDrawer(true)}
-          style={{ background: "linear-gradient(135deg,#E84B9C,#F97316)", border: "none", color: "#fff", padding: "9px 18px", borderRadius: "8px", cursor: "pointer", fontSize: "13px", fontWeight: 700, fontFamily: "inherit", boxShadow: "0 4px 14px rgba(232,75,156,0.3)" }}>
-          + New Account
-        </button>
-      </div>
-
-      <div style={{ display: "flex", gap: "10px", marginBottom: "16px", alignItems: "center" }}>
-        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by name, industry, country…"
-          style={{ flex: 1, ...IS }} onFocus={e => e.target.style.borderColor = V.pink} onBlur={e => e.target.style.borderColor = V.border}/>
-        <span style={{ fontSize: "12px", color: V.muted, whiteSpace: "nowrap" }}>{filtered.length} account{filtered.length !== 1 ? "s" : ""}</span>
-      </div>
-
-      <div style={{ background: "#fff", borderRadius: "12px", border: `1px solid ${V.border}`, overflow: "hidden" }}>
-        {loading ? (
-          <div style={{ padding: "60px", textAlign: "center", color: V.muted }}>Loading…</div>
-        ) : filtered.length === 0 ? (
-          <div style={{ padding: "60px 24px", textAlign: "center" }}>
-            <div style={{ fontSize: "36px", marginBottom: "8px" }}>🏢</div>
-            <div style={{ fontSize: "14px", fontWeight: 700, color: V.ink }}>No accounts yet</div>
-            <div style={{ fontSize: "12px", color: V.muted, marginTop: "4px" }}>Create an account or select one while building a quote</div>
-          </div>
-        ) : (
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead>
-              <tr style={{ background: "#F8FAFC" }}>
-                {["Account","Industry","Country","Contacts",""].map((h,i) => (
-                  <th key={i} style={{ padding: "10px 18px", textAlign: "left", fontSize: "10.5px", fontWeight: 700, color: V.muted, textTransform: "uppercase", letterSpacing: "0.06em", borderBottom: `1px solid ${V.border}` }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map(acc => (
-                <tr key={acc.id} style={{ borderBottom: `1px solid ${V.border}`, cursor: "pointer" }}
-                  onMouseEnter={e => e.currentTarget.style.background = "#F8FAFC"}
-                  onMouseLeave={e => e.currentTarget.style.background = "#fff"}
-                  onClick={() => openAccount(acc)}>
-                  <td style={{ padding: "13px 18px" }}>
-                    <div style={{ fontWeight: 700, fontSize: "13px", color: V.ink }}>{acc.name}</div>
-                    {acc.website && <div style={{ fontSize: "11px", color: "#93C5FD", marginTop: "1px" }}>{acc.website}</div>}
-                  </td>
-                  <td style={{ padding: "13px 18px", fontSize: "12px", color: V.muted }}>{acc.industry || "—"}</td>
-                  <td style={{ padding: "13px 18px", fontSize: "12px", color: V.muted }}>{acc.country || "—"}</td>
-                  <td style={{ padding: "13px 18px", fontSize: "12px", color: V.muted }}>{(acc.contacts||[]).length}</td>
-                  <td style={{ padding: "13px 18px", textAlign: "right" }}>
-                    <span style={{ fontSize: "12px", color: V.pink, fontWeight: 600 }}>View →</span>
-                  </td>
-                </tr>
+      )}
+      <div style={{ overflowX: "auto" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
+          <thead>
+            <tr style={{ background: "#F8FAFC" }}>
+              <th style={{ width: "36px", padding: "9px 8px", borderBottom: `1px solid ${V.border}` }}>
+                <input type="checkbox" checked={selected.size > 0 && selected.size === sortedRows.length} onChange={toggleAll} style={{ cursor: "pointer" }}/>
+              </th>
+              {columns.map(col => (
+                <th key={col.key} onClick={() => col.sortable !== false && toggleSort(col.key)}
+                  style={{ padding: "9px 14px", textAlign: col.align || "left", fontSize: "10.5px", fontWeight: 700, color: V.muted, textTransform: "uppercase", letterSpacing: "0.06em", borderBottom: `1px solid ${V.border}`, cursor: col.sortable !== false ? "pointer" : "default", whiteSpace: "nowrap", userSelect: "none" }}>
+                  {col.label}{sort?.key === col.key && (sort.dir === "asc" ? " ↑" : " ↓")}
+                </th>
               ))}
-            </tbody>
-          </table>
-        )}
+            </tr>
+          </thead>
+          <tbody>
+            {sortedRows.map(row => (
+              <tr key={row.id} style={{ borderBottom: "1px solid #F1F5F9" }}
+                onMouseEnter={e => e.currentTarget.style.background = "#FAFBFC"}
+                onMouseLeave={e => e.currentTarget.style.background = "#fff"}>
+                <td style={{ padding: "6px 8px", textAlign: "center" }}>
+                  <input type="checkbox" checked={selected.has(row.id)} onChange={() => toggleSel(row.id)} style={{ cursor: "pointer" }}/>
+                </td>
+                {columns.map(col => {
+                  const isEditing = editing?.rowId === row.id && editing?.key === col.key;
+                  const editable = isColEditable(col, row);
+                  return (
+                    <td key={col.key}
+                      onClick={() => { if (isEditing) return; if (col.onClick) col.onClick(row); else if (editable) startEdit(row, col); }}
+                      style={{ padding: isEditing ? "4px 8px" : "10px 14px", textAlign: col.align || "left", cursor: col.type === "picker" ? "default" : (editable ? "text" : "default"), minWidth: col.width || 120, position: "relative" }}>
+                      {col.type === "picker" ? col.renderPicker(row) : isEditing ? (
+                        col.type === "select" ? (
+                          <select autoFocus value={draft} onChange={e => setDraft(e.target.value)}
+                            onBlur={() => commitEdit(false)}
+                            onKeyDown={e => { if (e.key === "Enter") commitEdit(true); if (e.key === "Escape") cancelEdit(); }}
+                            style={{ ...IS, padding: "6px 8px", fontSize: "12.5px" }}>
+                            {col.options.map(o => <option key={String(o.value)} value={o.value}>{o.label}</option>)}
+                          </select>
+                        ) : col.type === "date" ? (
+                          <input autoFocus type="date" value={draft || ""} onChange={e => setDraft(e.target.value)}
+                            onBlur={() => commitEdit(false)}
+                            onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); commitEdit(true); } if (e.key === "Tab") { e.preventDefault(); commitEdit(true); } if (e.key === "Escape") cancelEdit(); }}
+                            style={{ ...IS, padding: "6px 8px", fontSize: "12.5px" }}/>
+                        ) : (
+                          <input autoFocus type={col.type === "currency" || col.type === "number" ? "number" : col.type === "email" ? "email" : "text"}
+                            value={draft ?? ""} onChange={e => setDraft(e.target.value)}
+                            onBlur={() => commitEdit(false)}
+                            onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); commitEdit(true); } if (e.key === "Tab") { e.preventDefault(); commitEdit(true); } if (e.key === "Escape") cancelEdit(); }}
+                            style={{ ...IS, padding: "6px 8px", fontSize: "12.5px" }}/>
+                        )
+                      ) : (
+                        col.render ? col.render(row[col.key], row) : (row[col.key] || <span style={{ color: "#CBD5E1" }}>—</span>)
+                      )}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+            {sortedRows.length === 0 && (
+              <tr><td colSpan={columns.length + 1} style={{ padding: "60px 24px", textAlign: "center" }}>
+                <div style={{ fontSize: "32px", marginBottom: "8px" }}>{emptyIcon}</div>
+                <div style={{ fontSize: "14px", fontWeight: 700, color: V.ink }}>{emptyTitle}</div>
+                {emptySub && <div style={{ fontSize: "12px", color: V.muted, marginTop: "4px" }}>{emptySub}</div>}
+              </td></tr>
+            )}
+          </tbody>
+        </table>
       </div>
+      <div onClick={adding ? undefined : handleAdd}
+        style={{ padding: "10px 16px", borderTop: sortedRows.length ? `1px solid ${V.border}` : "none", color: V.muted, fontSize: "12.5px", fontWeight: 600, cursor: adding ? "default" : "pointer" }}
+        onMouseEnter={e => e.currentTarget.style.background = "#F8FAFC"} onMouseLeave={e => e.currentTarget.style.background = "#fff"}>
+        {adding ? "Adding…" : addLabel}
+      </div>
+    </div>
+  );
+}
 
-      {showDrawer && (
-        <AccountDrawer initialName="" user={user}
-          onSave={() => { setShowDrawer(false); reload(); }}
-          onClose={() => setShowDrawer(false)}/>
+function CrmToolbar({ title, sub, search, onSearch, count, countLabel, cta }) {
+  return (
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "18px", gap: "12px", flexWrap: "wrap" }}>
+      <div>
+        <div style={{ fontSize: "20px", fontWeight: 800, color: V.navy }}>{title}</div>
+        <div style={{ fontSize: "12px", color: V.muted, marginTop: "2px" }}>{sub}</div>
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+        <input value={search} onChange={e => onSearch(e.target.value)} placeholder={`Search ${countLabel.toLowerCase()}…`} style={{ ...IS, width: "220px" }}/>
+        <span style={{ fontSize: "12px", color: V.muted, whiteSpace: "nowrap" }}>{count} {countLabel.toLowerCase()}{count !== 1 ? "s" : ""}</span>
+        {cta}
+      </div>
+    </div>
+  );
+}
+
+// ─── LEADS VIEW ─────────────────────────────────────────────────────────────────
+function LeadsView({ user }) {
+  const [rows, setRows]         = useState([]);
+  const [loading, setLoading]   = useState(true);
+  const [search, setSearch]     = useState("");
+  const [converting, setConverting] = useState(null);
+  const [toast, setToast]       = useState("");
+
+  const reload = useCallback(() => { setLoading(true); fetchAllLeads().then(r => { setRows(r); setLoading(false); }); }, []);
+  useEffect(() => { reload(); }, [reload]);
+
+  const filtered = rows.filter(r => {
+    const s = search.toLowerCase();
+    return !s || r.name?.toLowerCase().includes(s) || r.company?.toLowerCase().includes(s) || r.email?.toLowerCase().includes(s);
+  });
+
+  async function handleCellCommit(id, key, value) {
+    setRows(rs => rs.map(r => r.id === id ? { ...r, [key]: value } : r));
+    await updateLead(id, { [key]: value });
+  }
+  async function handleAddRow() {
+    const row = await insertLead(user);
+    if (row) setRows(rs => [row, ...rs]);
+    return row;
+  }
+  async function handleDeleteRows(ids) {
+    setRows(rs => rs.filter(r => !ids.includes(r.id)));
+    await deleteLeads(ids);
+  }
+  async function handleConvert(lead) {
+    setConverting(lead.id);
+    try {
+      await convertLead(lead, user);
+      setToast(`Converted "${lead.name}" to a contact + opportunity.`);
+      reload();
+      setTimeout(() => setToast(""), 4000);
+    } catch (e) {
+      alert("Failed to convert lead: " + e.message);
+    } finally { setConverting(null); }
+  }
+
+  const columns = [
+    { key: "name", label: "Name", width: 170 },
+    { key: "company", label: "Company", width: 160 },
+    { key: "title", label: "Title", width: 140 },
+    { key: "email", label: "Email", type: "email", width: 190 },
+    { key: "phone", label: "Phone", width: 130 },
+    { key: "source", label: "Source", type: "select", width: 140, options: [{ value: "", label: "—" }, ...LEAD_SOURCES.map(s => ({ value: s, label: s }))] },
+    { key: "status", label: "Status", type: "select", width: 130, options: LEAD_STATUS_OPTIONS, render: v => <Badge color={LEAD_STATUS_META[v]?.color || "#94A3B8"}>{LEAD_STATUS_META[v]?.label || v}</Badge> },
+    {
+      key: "convert", label: "", editable: false, sortable: false, width: 120,
+      render: (_, row) => row.status === "converted"
+        ? <span style={{ fontSize: "11.5px", color: "#7C3AED", fontWeight: 700 }}>Converted ✓</span>
+        : (
+          <button onClick={e => { e.stopPropagation(); handleConvert(row); }} disabled={converting === row.id}
+            style={{ background: V.navy, color: "#fff", border: "none", padding: "5px 11px", borderRadius: "6px", fontSize: "11.5px", fontWeight: 700, cursor: converting === row.id ? "default" : "pointer", fontFamily: "inherit" }}>
+            {converting === row.id ? "Converting…" : "Convert →"}
+          </button>
+        ),
+    },
+  ];
+
+  return (
+    <div style={{ padding: "28px 32px" }}>
+      <CrmToolbar title="Leads" sub="Unqualified prospects — convert to a contact + opportunity when ready"
+        search={search} onSearch={setSearch} count={filtered.length} countLabel="Lead"/>
+      {toast && <div style={{ marginBottom: "14px", padding: "10px 14px", background: "#F5F3FF", border: "1px solid #DDD6FE", borderRadius: "8px", color: "#6D28D9", fontSize: "12.5px", fontWeight: 600 }}>{toast}</div>}
+      {loading ? (
+        <div style={{ padding: "60px", textAlign: "center", color: V.muted }}>Loading…</div>
+      ) : (
+        <DataGrid columns={columns} rows={filtered}
+          onCellCommit={handleCellCommit} onAddRow={handleAddRow} onDeleteRows={handleDeleteRows}
+          addLabel="+ New Lead" emptyIcon="🧲" emptyTitle="No leads yet" emptySub="Add a lead to start tracking prospects"/>
+      )}
+    </div>
+  );
+}
+
+// ─── CONTACTS VIEW (spreadsheet) ─────────────────────────────────────────────────
+function ContactsView({ user }) {
+  const [rows, setRows]       = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch]   = useState("");
+
+  const reload = useCallback(() => { setLoading(true); fetchAllContacts().then(r => { setRows(r); setLoading(false); }); }, []);
+  useEffect(() => { reload(); }, [reload]);
+
+  const filtered = rows.filter(r => {
+    const s = search.toLowerCase();
+    return !s || r.name?.toLowerCase().includes(s) || r.company_name?.toLowerCase().includes(s) || r.email?.toLowerCase().includes(s);
+  });
+
+  async function handleCellCommit(id, key, value) {
+    setRows(rs => rs.map(r => r.id === id ? { ...r, [key]: value } : r));
+    await updateContact(id, { [key]: value });
+  }
+  async function handleAddRow() {
+    const row = await insertContact(user);
+    if (row) setRows(rs => [row, ...rs]);
+    return row;
+  }
+  async function handleDeleteRows(ids) {
+    setRows(rs => rs.filter(r => !ids.includes(r.id)));
+    await deleteContacts(ids);
+  }
+  async function handlePickAccount(row, acc) {
+    setRows(rs => rs.map(r => r.id === row.id ? { ...r, account_id: acc?.id || null, company_name: acc?.label || "" } : r));
+    await updateContact(row.id, { account_id: acc?.id || null });
+  }
+  async function handleCreateAccount(row, name) {
+    const acc = await getOrCreateAccountByName(name, user);
+    if (acc) await handlePickAccount(row, { id: acc.id, label: acc.name });
+  }
+
+  const columns = [
+    { key: "name", label: "Name", width: 170 },
+    {
+      key: "company_name", label: "Company", width: 180, editable: false, sortable: true, type: "picker",
+      renderPicker: row => (
+        <RecordPicker
+          displayValue={row.company_name} value={row.account_id}
+          search={q => searchAccounts(q || "").then(rs => rs.map(a => ({ id: a.id, label: a.name })))}
+          onPick={acc => handlePickAccount(row, acc)}
+          onCreate={name => handleCreateAccount(row, name)}
+          createLabel="Create company"/>
+      ),
+    },
+    { key: "designation", label: "Title", width: 150 },
+    { key: "email", label: "Email", type: "email", width: 190 },
+    { key: "phone", label: "Phone", width: 140 },
+    { key: "source", label: "Source", type: "select", width: 140, options: [{ value: "", label: "—" }, ...LEAD_SOURCES.map(s => ({ value: s, label: s }))] },
+    { key: "is_primary", label: "Primary", type: "select", width: 100, options: [{ value: false, label: "No" }, { value: true, label: "Yes" }], render: v => v ? <Badge color="#E84B9C">Primary</Badge> : <span style={{ color: "#CBD5E1" }}>—</span> },
+  ];
+
+  return (
+    <div style={{ padding: "28px 32px" }}>
+      <CrmToolbar title="Contacts" sub="People at your customer and prospect companies"
+        search={search} onSearch={setSearch} count={filtered.length} countLabel="Contact"/>
+      {loading ? (
+        <div style={{ padding: "60px", textAlign: "center", color: V.muted }}>Loading…</div>
+      ) : (
+        <DataGrid columns={columns} rows={filtered}
+          onCellCommit={handleCellCommit} onAddRow={handleAddRow} onDeleteRows={handleDeleteRows}
+          addLabel="+ New Contact" emptyIcon="👤" emptyTitle="No contacts yet" emptySub="Add a contact or convert a lead"/>
+      )}
+    </div>
+  );
+}
+
+// ─── OPPORTUNITIES VIEW (spreadsheet) ────────────────────────────────────────────
+function OpportunitiesView({ user, onLoadQuote }) {
+  const [rows, setRows]       = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch]   = useState("");
+
+  const reload = useCallback(() => {
+    setLoading(true);
+    Promise.all([fetchAllOpportunities(), fetchOpportunityQuoteTotals()]).then(([opps, totals]) => {
+      setRows(opps.map(o => ({ ...o, linkedQuoteCount: totals[o.id]?.count || 0, linkedQuoteSum: totals[o.id]?.sum || 0 })));
+      setLoading(false);
+    });
+  }, []);
+  useEffect(() => { reload(); }, [reload]);
+
+  const filtered = rows.filter(r => {
+    const s = search.toLowerCase();
+    return !s || r.name?.toLowerCase().includes(s) || r.company_name?.toLowerCase().includes(s) || r.contact_name?.toLowerCase().includes(s);
+  });
+
+  const pipelineValue = filtered.filter(r => !["closed_won","closed_lost"].includes(r.stage))
+    .reduce((s, r) => s + (r.linkedQuoteCount > 0 ? r.linkedQuoteSum : (r.value_usd || 0)), 0);
+
+  async function handleCellCommit(id, key, value) {
+    setRows(rs => rs.map(r => r.id === id ? { ...r, [key]: value } : r));
+    await updateOpportunity(id, { [key]: key === "value_usd" ? (parseFloat(value) || 0) : value });
+  }
+  async function handleAddRow() {
+    const row = await insertOpportunity(user);
+    if (row) setRows(rs => [{ ...row, linkedQuoteCount: 0, linkedQuoteSum: 0 }, ...rs]);
+    return row;
+  }
+  async function handleDeleteRows(ids) {
+    setRows(rs => rs.filter(r => !ids.includes(r.id)));
+    await deleteOpportunities(ids);
+  }
+  async function handlePickAccount(row, acc) {
+    setRows(rs => rs.map(r => r.id === row.id ? { ...r, account_id: acc?.id || null, company_name: acc?.label || "" } : r));
+    await updateOpportunity(row.id, { account_id: acc?.id || null });
+  }
+  async function handleCreateAccount(row, name) {
+    const acc = await getOrCreateAccountByName(name, user);
+    if (acc) await handlePickAccount(row, { id: acc.id, label: acc.name });
+  }
+  async function handlePickContact(row, c) {
+    setRows(rs => rs.map(r => r.id === row.id ? { ...r, primary_contact_id: c?.id || null, contact_name: c?.label?.split(" · ")[0] || "" } : r));
+    await updateOpportunity(row.id, { primary_contact_id: c?.id || null });
+  }
+
+  const columns = [
+    { key: "name", label: "Opportunity", width: 200 },
+    {
+      key: "company_name", label: "Company", width: 170, editable: false, sortable: true, type: "picker",
+      renderPicker: row => (
+        <RecordPicker
+          displayValue={row.company_name} value={row.account_id}
+          search={q => searchAccounts(q || "").then(rs => rs.map(a => ({ id: a.id, label: a.name })))}
+          onPick={acc => handlePickAccount(row, acc)}
+          onCreate={name => handleCreateAccount(row, name)}
+          createLabel="Create company"/>
+      ),
+    },
+    {
+      key: "contact_name", label: "Primary Contact", width: 170, editable: false, sortable: true, type: "picker",
+      renderPicker: row => (
+        <RecordPicker
+          displayValue={row.contact_name} value={row.primary_contact_id}
+          search={q => supabase.from("contacts").select("id,name,accounts(name)").ilike("name", `%${q || ""}%`).order("name").limit(10)
+            .then(({ data }) => (data || []).map(c => ({ id: c.id, label: c.name + (c.accounts?.name ? ` · ${c.accounts.name}` : "") })))}
+          onPick={c => handlePickContact(row, c)}
+          createLabel="Create contact" onCreate={null}/>
+      ),
+    },
+    { key: "stage", label: "Stage", type: "select", width: 150, options: OPP_STAGE_OPTIONS, render: v => <Badge color={OPP_STAGE_META[v]?.color || "#94A3B8"}>{OPP_STAGE_META[v]?.label || v}</Badge> },
+    {
+      key: "value_usd", label: "Value (USD)", width: 170, align: "right", type: "number",
+      editable: row => row.linkedQuoteCount === 0,
+      render: (v, row) => {
+        const val = row.linkedQuoteCount > 0 ? row.linkedQuoteSum : v;
+        return (
+          <span style={{ fontWeight: 700 }}>
+            ${Number(val || 0).toLocaleString("en-US", { maximumFractionDigits: 0 })}
+            {row.linkedQuoteCount > 0 && <span style={{ fontSize: "10px", color: V.muted, fontWeight: 500, marginLeft: "6px" }}>({row.linkedQuoteCount} quote{row.linkedQuoteCount > 1 ? "s" : ""})</span>}
+          </span>
+        );
+      },
+    },
+    { key: "expected_close_date", label: "Close Date", type: "date", width: 140 },
+  ];
+
+  return (
+    <div style={{ padding: "28px 32px" }}>
+      <CrmToolbar title="Opportunities" sub="Deal pipeline — value auto-syncs from linked quotes"
+        search={search} onSearch={setSearch} count={filtered.length} countLabel="Opportunity"/>
+      <div style={{ display: "flex", gap: "12px", marginBottom: "18px" }}>
+        <div style={{ background: "#fff", borderRadius: "12px", padding: "14px 20px", border: `1px solid ${V.border}` }}>
+          <div style={{ fontSize: "10px", fontWeight: 800, color: V.muted, textTransform: "uppercase", letterSpacing: "0.09em", marginBottom: "6px" }}>Open Pipeline</div>
+          <div style={{ fontSize: "22px", fontWeight: 900, color: "#E84B9C" }}>${pipelineValue.toLocaleString("en-US", { maximumFractionDigits: 0 })}</div>
+        </div>
+      </div>
+      {loading ? (
+        <div style={{ padding: "60px", textAlign: "center", color: V.muted }}>Loading…</div>
+      ) : (
+        <DataGrid columns={columns} rows={filtered}
+          onCellCommit={handleCellCommit} onAddRow={handleAddRow} onDeleteRows={handleDeleteRows}
+          addLabel="+ New Opportunity" emptyIcon="🎯" emptyTitle="No opportunities yet" emptySub="Add a deal or convert a lead to get started"/>
       )}
     </div>
   );
@@ -2017,6 +2471,9 @@ function Sidebar({ view, setView, user, onSignOut, navItems, userProfile }) {
 function HomeView({ user, onLoadQuote, onNewQuote }) {
   const [quotes,  setQuotes]  = useState([]);
   const [loading, setLoading] = useState(true);
+  const [leads,   setLeads]   = useState([]);
+  const [opps,    setOpps]    = useState([]);
+  const [crmLoading, setCrmLoading] = useState(true);
   const name = user?.user_metadata?.full_name || user?.email?.split("@")[0] || "there";
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
@@ -2028,11 +2485,24 @@ function HomeView({ user, onLoadQuote, onNewQuote }) {
     });
   }, [user.email]);
 
+  useEffect(() => {
+    Promise.all([fetchAllLeads(), fetchAllOpportunities(), fetchOpportunityQuoteTotals()]).then(([l, o, totals]) => {
+      setLeads(l);
+      setOpps(o.map(x => ({ ...x, value: totals[x.id]?.count ? totals[x.id].sum : (x.value_usd||0) })));
+      setCrmLoading(false);
+    });
+  }, []);
+
   const fmt$ = n => `$${n.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
   const now = new Date();
   const thisMonth  = quotes.filter(q => q.savedAt && new Date(q.savedAt).getMonth() === now.getMonth() && new Date(q.savedAt).getFullYear() === now.getFullYear());
   const totalUSD   = quotes.reduce((s, q) => s + (q.subUSD||0), 0);
   const recent     = quotes.slice(0, 8);
+
+  const openLeads      = leads.filter(l => l.status !== "converted" && l.status !== "disqualified");
+  const openOpps        = opps.filter(o => !["closed_won","closed_lost"].includes(o.stage));
+  const openPipelineUSD = openOpps.reduce((s,o) => s + o.value, 0);
+  const recentOpps       = [...opps].sort((a,b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 6);
 
   return (
     <div style={{ padding: "32px 36px", maxWidth: "1000px" }}>
@@ -2069,6 +2539,56 @@ function HomeView({ user, onLoadQuote, onNewQuote }) {
           style={{ background: "linear-gradient(135deg,#E84B9C,#F97316)", color: "#fff", border: "none", padding: "10px 22px", borderRadius: "9px", cursor: "pointer", fontSize: "13px", fontWeight: 700, fontFamily: "inherit", whiteSpace: "nowrap", boxShadow: "0 4px 14px rgba(232,75,156,0.4)" }}>
           + New Quote
         </button>
+      </div>
+
+      {/* CRM pipeline snapshot */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "14px", marginBottom: "24px" }}>
+        {[
+          { label: "Open Leads",       value: crmLoading ? "—" : openLeads.length,               color: "#0EA5E9", sub: "in progress" },
+          { label: "Open Opportunities", value: crmLoading ? "—" : openOpps.length,               color: "#7C3AED", sub: "in pipeline" },
+          { label: "Open Pipeline (USD)", value: crmLoading ? "—" : fmt$(openPipelineUSD),        color: "#E84B9C", sub: "not yet closed" },
+        ].map(s => (
+          <div key={s.label} style={{ background: "#fff", borderRadius: "14px", padding: "18px 22px", border: `1px solid ${V.border}`, boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
+            <div style={{ fontSize: "10px", fontWeight: 800, color: V.muted, textTransform: "uppercase", letterSpacing: "0.09em", marginBottom: "8px" }}>{s.label}</div>
+            <div style={{ fontSize: "26px", fontWeight: 900, color: s.color }}>{s.value}</div>
+            <div style={{ fontSize: "11px", color: V.muted, marginTop: "3px" }}>{s.sub}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Recent opportunities */}
+      <div style={{ background: "#fff", borderRadius: "14px", border: `1px solid ${V.border}`, overflow: "hidden", marginBottom: "24px" }}>
+        <div style={{ padding: "16px 22px", borderBottom: `1px solid ${V.border}` }}>
+          <div style={{ fontSize: "13px", fontWeight: 800, color: V.navy }}>Recent Opportunities</div>
+        </div>
+        {crmLoading ? (
+          <div style={{ padding: "40px", textAlign: "center", color: V.muted, fontSize: "13px" }}>Loading…</div>
+        ) : recentOpps.length === 0 ? (
+          <div style={{ padding: "40px", textAlign: "center" }}>
+            <div style={{ fontSize: "28px", marginBottom: "6px" }}>🎯</div>
+            <div style={{ fontSize: "13px", fontWeight: 700, color: V.ink }}>No opportunities yet</div>
+          </div>
+        ) : (
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead>
+              <tr style={{ background: "#F8FAFC" }}>
+                {["Opportunity","Company","Stage","Value (USD)"].map(h => (
+                  <th key={h} style={{ padding: "10px 20px", textAlign: "left", fontSize: "10.5px", fontWeight: 700, color: V.muted, textTransform: "uppercase", letterSpacing: "0.06em", borderBottom: `1px solid ${V.border}` }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {recentOpps.map(o => (
+                <tr key={o.id} style={{ borderBottom: "1px solid #F1F5F9" }}>
+                  <td style={{ padding: "12px 20px", fontWeight: 700, fontSize: "13px", color: V.ink }}>{o.name}</td>
+                  <td style={{ padding: "12px 20px", fontSize: "12px", color: V.muted }}>{o.company_name || "—"}</td>
+                  <td style={{ padding: "12px 20px" }}><Badge color={OPP_STAGE_META[o.stage]?.color || "#94A3B8"}>{OPP_STAGE_META[o.stage]?.label || o.stage}</Badge></td>
+                  <td style={{ padding: "12px 20px", fontWeight: 700, fontSize: "13px", color: V.ink }}>{fmt$(o.value)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
 
       {/* Recent quotes */}
@@ -2301,10 +2821,12 @@ export default function QuoteBuilder({ user, onSignOut }) {
   const canManageRoles = userRole === "admin" || userRole === "hr_admin";
 
   const navItems = [
-    { id: "home",     label: "Home",       icon: "⌂" },
-    { id: "builder",  label: "New Quote",  icon: "✦" },
-    { id: "accounts", label: "Accounts",   icon: "◈" },
-    { id: "history",  label: "All Quotes", icon: "≡" },
+    { id: "home",          label: "Home",          icon: "⌂" },
+    { id: "builder",       label: "New Quote",     icon: "✦" },
+    { id: "leads",         label: "Leads",         icon: "🧲" },
+    { id: "contacts",      label: "Contacts",      icon: "◈" },
+    { id: "opportunities", label: "Opportunities", icon: "🎯" },
+    { id: "history",       label: "All Quotes",    icon: "≡" },
     ...(canManageRoles ? [{ id: "users", label: "Users & Roles", icon: "◉" }] : []),
   ];
 
@@ -2485,8 +3007,16 @@ export default function QuoteBuilder({ user, onSignOut }) {
           <HomeView user={user} onLoadQuote={loadQuote} onNewQuote={() => { resetQuote(); setView("builder"); }}/>
         )}
 
-        {view === "accounts" && (
-          <AccountsView onLoadQuote={q => { loadQuote(q); }} user={user}/>
+        {view === "leads" && (
+          <LeadsView user={user}/>
+        )}
+
+        {view === "contacts" && (
+          <ContactsView user={user}/>
+        )}
+
+        {view === "opportunities" && (
+          <OpportunitiesView user={user} onLoadQuote={q => { loadQuote(q); }}/>
         )}
 
         {view === "history" && (
