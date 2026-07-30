@@ -97,59 +97,14 @@ CREATE POLICY "role_based_select_quotes" ON quotes
     user_id = auth.uid()
   );
 
--- ─── 7. Create user accounts ─────────────────────────────────────────────────
+-- ─── 7. Assign roles to existing users ───────────────────────────────────────
+-- NOTE: User accounts must be created via the Supabase Dashboard (Authentication →
+-- Add User) or the Admin API's invite flow — NEVER via a checked-in SQL script
+-- with an embedded plaintext password. This section only assigns a role to a
+-- user_profiles row for an account that already exists in auth.users.
 
--- pooja.thareja@virtuos.com → HR-Admin
-DO $$
-DECLARE v_uid uuid;
-BEGIN
-  SELECT id INTO v_uid FROM auth.users WHERE email = 'pooja.thareja@virtuos.com';
-  IF v_uid IS NULL THEN
-    v_uid := gen_random_uuid();
-    INSERT INTO auth.users (
-      id, aud, role, email, encrypted_password, email_confirmed_at,
-      raw_app_meta_data, raw_user_meta_data, created_at, updated_at,
-      is_sso_user, confirmation_sent_at
-    ) VALUES (
-      v_uid, 'authenticated', 'authenticated',
-      'pooja.thareja@virtuos.com',
-      crypt('Virtuos@2024!', gen_salt('bf')),
-      now(),
-      '{"provider":"email","providers":["email"]}',
-      '{"full_name":"Pooja Thareja"}',
-      now(), now(), false, now()
-    );
-  END IF;
-  INSERT INTO user_profiles (id, email, full_name, role)
-  VALUES (v_uid, 'pooja.thareja@virtuos.com', 'Pooja Thareja', 'hr_admin')
-  ON CONFLICT (id) DO UPDATE SET role = 'hr_admin', full_name = 'Pooja Thareja', email = 'pooja.thareja@virtuos.com';
-END $$;
-
--- shivam.chawla@virtuos.com → Manager
-DO $$
-DECLARE v_uid uuid;
-BEGIN
-  SELECT id INTO v_uid FROM auth.users WHERE email = 'shivam.chawla@virtuos.com';
-  IF v_uid IS NULL THEN
-    v_uid := gen_random_uuid();
-    INSERT INTO auth.users (
-      id, aud, role, email, encrypted_password, email_confirmed_at,
-      raw_app_meta_data, raw_user_meta_data, created_at, updated_at,
-      is_sso_user, confirmation_sent_at
-    ) VALUES (
-      v_uid, 'authenticated', 'authenticated',
-      'shivam.chawla@virtuos.com',
-      crypt('Virtuos@2024!', gen_salt('bf')),
-      now(),
-      '{"provider":"email","providers":["email"]}',
-      '{"full_name":"Shivam Chawla"}',
-      now(), now(), false, now()
-    );
-  END IF;
-  INSERT INTO user_profiles (id, email, full_name, role)
-  VALUES (v_uid, 'shivam.chawla@virtuos.com', 'Shivam Chawla', 'manager')
-  ON CONFLICT (id) DO UPDATE SET role = 'manager', full_name = 'Shivam Chawla', email = 'shivam.chawla@virtuos.com';
-END $$;
+UPDATE user_profiles SET role = 'hr_admin' WHERE email = 'pooja.thareja@virtuos.com';
+UPDATE user_profiles SET role = 'manager'  WHERE email = 'shivam.chawla@virtuos.com';
 
 -- ─── 8. Make existing admin (shreyank@virtuos.com) an Admin ──────────────────
 UPDATE user_profiles
