@@ -2639,7 +2639,7 @@ function HomeView({ user, onLoadQuote, onNewQuote }) {
 }
 
 // ─── QUOTE HISTORY VIEW ───────────────────────────────────────────────────────
-function QuoteHistory({ onNewQuote, onLoadQuote, user }) {
+function QuoteHistory({ onNewQuote, onLoadQuote, user, userRole }) {
   const [quotes,   setQuotes]  = useState([]);
   const [loading,  setLoading] = useState(true);
   const [search,   setSearch]  = useState("");
@@ -2669,8 +2669,8 @@ function QuoteHistory({ onNewQuote, onLoadQuote, user }) {
     <div style={{ padding: "28px 32px" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "22px", gap: "12px", flexWrap: "wrap" }}>
         <div>
-          <div style={{ fontSize: "20px", fontWeight: 800, color: V.navy }}>All Quotes</div>
-          <div style={{ fontSize: "12px", color: V.muted, marginTop: "2px" }}>Every quote across your team</div>
+          <div style={{ fontSize: "20px", fontWeight: 800, color: V.navy }}>{userRole === "admin" ? "All Quotes" : "My Quotes"}</div>
+          <div style={{ fontSize: "12px", color: V.muted, marginTop: "2px" }}>{userRole === "admin" ? "Every quote across your team" : "Quotes you've created"}</div>
         </div>
         <button onClick={onNewQuote}
           style={{ background: "linear-gradient(135deg,#E84B9C,#F97316)", color: "#fff", border: "none", padding: "9px 18px", borderRadius: "8px", cursor: "pointer", fontSize: "13px", fontWeight: 700, fontFamily: "inherit", boxShadow: "0 4px 14px rgba(232,75,156,0.3)" }}>
@@ -2826,7 +2826,7 @@ export default function QuoteBuilder({ user, onSignOut }) {
     { id: "leads",         label: "Leads",         icon: "🧲" },
     { id: "contacts",      label: "Contacts",      icon: "◈" },
     { id: "opportunities", label: "Opportunities", icon: "🎯" },
-    { id: "history",       label: "All Quotes",    icon: "≡" },
+    { id: "history",       label: userRole === "admin" ? "All Quotes" : "My Quotes", icon: "≡" },
     ...(canManageRoles ? [{ id: "users", label: "Users & Roles", icon: "◉" }] : []),
   ];
 
@@ -3020,7 +3020,7 @@ export default function QuoteBuilder({ user, onSignOut }) {
         )}
 
         {view === "history" && (
-          <QuoteHistory onNewQuote={() => { resetQuote(); setView("builder"); }} onLoadQuote={loadQuote} user={user}/>
+          <QuoteHistory onNewQuote={() => { resetQuote(); setView("builder"); }} onLoadQuote={loadQuote} user={user} userRole={userRole}/>
         )}
 
         {view === "users" && (
