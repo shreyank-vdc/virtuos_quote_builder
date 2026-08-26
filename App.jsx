@@ -3077,7 +3077,7 @@ export default function QuoteBuilder({ user, onSignOut }) {
                     <Inp label="Owner / Sales Rep" value={qd.owner} onChange={v => setQd(q => ({ ...q, owner: v }))} placeholder="Your Name"/>
                     <Inp label="Valid Until" type="date" value={qd.validUntil} onChange={v => setQd(q => ({ ...q, validUntil: v }))}/>
                     <Sel label="Payment Terms" value={paymentTerms} onChange={setPaymentTerms}
-                      options={["100% Advance","Net 15 days","Net 30 days"].map(v => ({ value: v, label: v }))}/>
+                      options={["100% Advance","Net 15 days","Net 30 days","Milestone Basis"].map(v => ({ value: v, label: v }))}/>
                   </Panel>
 
                   <Panel title="Subscription Period" icon="📅">
