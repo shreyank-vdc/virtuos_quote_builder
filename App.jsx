@@ -76,6 +76,7 @@ const PRODUCTS = {
       { id: "ss-dynamic-view",     name: "Dynamic View",             unitPrice: 1500.00, description: "$1,500.00/unit/yr" },
       { id: "ss-data-mesh",        name: "Smartsheet Data Mesh",     unitPrice: 12700.00, description: "$12,700.00/yr flat" },
       { id: "ss-data-shuttle",     name: "Data Shuttle",             unitPrice: 1200.00, description: "$1,200.00/yr flat" },
+      { id: "ss-control-center",   name: "Smartsheet Control Center", unitPrice: 25000.00, description: "$25,000.00/yr list price" },
     ],
     tc: `For all payments in INR, USD to INR exchange rates shall be applicable 'as on date' at the time of payment by customer. This order is non-cancellable & non-refundable. The Customer acknowledges that they are bound by the Smartsheet Subscriber Agreement for all matters related to licensing, security, privacy, and use of the software available at https://www.smartsheet.com/legal/user-agreement. *Government Taxes Are Extra.`
   },
