@@ -140,19 +140,20 @@ function autoEndDate(start,cycle,months,contractYears=1){
   else return "";
   return d.toISOString().split("T")[0];
 }
-function computeLines(lines, startDate, endDate, billingCycle) {
+function computeLines(lines, startDate, endDate, billingCycle, pricingMode="usd", currencyRate=1) {
+  const native = pricingMode === "native";
   return lines.map(line => {
     const p = PRODUCTS[line.productCategory];
     const all = [...(p?.tiers||[]),...(p?.addOns||[])];
     const item = all.find(i=>i.id===line.itemId);
     const isPro = line.productCategory==="professional_services";
-    const usd = isPro ? (line.ratePerHour||0) : (item?.unitPrice||0);
+    const usd = isPro ? (line.ratePerHour||0) : (native ? (line.nativeUnitPrice ?? Math.round((item?.unitPrice||0)*currencyRate*100)/100) : (item?.unitPrice||0));
     const pr = isPro ? 1 : proRataFactor(startDate,endDate,billingCycle);
     const annual = usd*line.qty;
     const effective = isPro ? annual : annual*pr;
     const disc = line.discountType==="percent" ? effective*(line.discount/100) : Math.min(line.discount,effective);
     const net = Math.max(0,effective-disc);
-    return {...line,item,p,annual,effective,disc,net,pr,isPro,isFullPeriod:pr>=0.9972};
+    return {...line,item,p,annual,effective,disc,net,pr,isPro,isFullPeriod:pr>=0.9972,unitResolved:usd};
   });
 }
 
@@ -212,18 +213,25 @@ function Panel({title,icon,children}){
 }
 
 // ─── PRODUCT LINE ─────────────────────────────────────────────────────────────
-function ProductLine({line,onUpdate,onRemove,billingCycle,startDate,endDate}){
+function ProductLine({line,onUpdate,onRemove,billingCycle,startDate,endDate,pricingMode="usd",currency}){
   const p=PRODUCTS[line.productCategory];
   const all=[...(p?.tiers||[]),...(p?.addOns||[])];
   const item=all.find(i=>i.id===line.itemId);
   const isPro=line.productCategory==="professional_services";
+  const native=pricingMode==="native";
+  const sym=currency?.symbol||"$";
+  const curCode=currency?.code||"USD";
   const pr=isPro?1:proRataFactor(startDate,endDate,billingCycle);
   const ratePerHour=line.ratePerHour||0;
-  const usd=isPro?ratePerHour:(item?.unitPrice||0);
+  const defaultNative=Math.round((item?.unitPrice||0)*(currency?.rate||1)*100)/100;
+  const nativeUnitPrice=line.nativeUnitPrice??defaultNative;
+  const usd=isPro?ratePerHour:(native?nativeUnitPrice:(item?.unitPrice||0));
   const effective=isPro?ratePerHour*line.qty:usd*line.qty*pr;
   const disc=line.discountType==="percent"?effective*(line.discount/100):Math.min(line.discount,effective);
   const net=Math.max(0,effective-disc);
   const full=pr>=0.9972;
+  const fmtNative = n => `${sym}${n.toLocaleString(numLocale(curCode),{minimumFractionDigits:2,maximumFractionDigits:2})}`;
+  const fmtAmt = native ? fmtNative : fmt$;
 
   return(
     <div style={{background:V.white,border:`1px solid ${V.border}`,borderLeft:`3px solid ${p?.color}`,borderRadius:"10px",padding:"14px",display:"flex",flexDirection:"column",gap:"10px",boxShadow:"0 1px 4px rgba(0,0,0,0.04)"}}>
@@ -240,7 +248,7 @@ function ProductLine({line,onUpdate,onRemove,billingCycle,startDate,endDate}){
           <>
             <Inp label="Hours" type="number" min="1"
               value={line.qty} onChange={v=>onUpdate({...line,qty:Math.max(1,parseInt(v)||1)})} onFocusSelect/>
-            <Inp label="Rate per Hour (USD)" type="number" min="0"
+            <Inp label={`Rate per Hour (${native?curCode:"USD"})`} type="number" min="0"
               value={ratePerHour} onChange={v=>onUpdate({...line,ratePerHour:parseFloat(v)||0})} onFocusSelect/>
           </>
         ):(
@@ -261,15 +269,18 @@ function ProductLine({line,onUpdate,onRemove,billingCycle,startDate,endDate}){
             <select value={line.discountType} onChange={e=>onUpdate({...line,discountType:e.target.value})}
               style={{border:`1.5px solid ${V.border}`,borderLeft:"none",borderRadius:"0 8px 8px 0",padding:"8px 4px",fontSize:"12px",background:V.white,outline:"none",cursor:"pointer",width:"40%",fontFamily:"inherit"}}>
               <option value="percent">%</option>
-              <option value="fixed">USD</option>
+              <option value="fixed">{native?curCode:"USD"}</option>
             </select>
           </div>
         </div>
         {isPro?(
           <div>
-            <Label>Total (USD)</Label>
-            <div style={{fontSize:"13px",color:V.muted,padding:"8px 0",fontWeight:500}}>{fmt$(effective)}</div>
+            <Label>Total ({native?curCode:"USD"})</Label>
+            <div style={{fontSize:"13px",color:V.muted,padding:"8px 0",fontWeight:500}}>{fmtAmt(effective)}</div>
           </div>
+        ):native?(
+          <Inp label={`Unit Price (${curCode}/yr)`} type="number" min="0"
+            value={nativeUnitPrice} onChange={v=>onUpdate({...line,nativeUnitPrice:parseFloat(v)||0})} onFocusSelect/>
         ):(
           <div>
             <Label>Unit (USD/yr)</Label>
@@ -277,8 +288,8 @@ function ProductLine({line,onUpdate,onRemove,billingCycle,startDate,endDate}){
           </div>
         )}
         <div>
-          <Label>Net (USD)</Label>
-          <div style={{fontSize:"15px",fontWeight:700,color:V.ink,padding:"8px 0"}}>{fmt$(net)}</div>
+          <Label>Net ({native?curCode:"USD"})</Label>
+          <div style={{fontSize:"15px",fontWeight:700,color:V.ink,padding:"8px 0"}}>{fmtAmt(net)}</div>
         </div>
       </div>
       {!isPro&&item?.description&&<p style={{fontSize:"11.5px",color:"#94A3B8",margin:0}}>{item.description}</p>}
@@ -295,7 +306,7 @@ function ProductLine({line,onUpdate,onRemove,billingCycle,startDate,endDate}){
 }
 
 // ─── HTML EXPORT ─────────────────────────────────────────────────────────────
-async function exportQuoteWord({cl,annualList,discTotal,subUSD,subLocal,taxLocal,grandLocal,customer,qd,currency,billingCycle,monthCount,startDate,endDate,taxConfig,paymentTerms,cats,sym,contractYears=1,yearEscalation=0,yearlyTotals=[],totalContractValue=0,hideDiscount=false}) {
+async function exportQuoteWord({cl,annualList,discTotal,subUSD,subLocal,taxLocal,grandLocal,customer,qd,currency,billingCycle,monthCount,startDate,endDate,taxConfig,paymentTerms,cats,sym,contractYears=1,yearEscalation=0,yearlyTotals=[],totalContractValue=0,hideDiscount=false,pricingMode="usd"}) {
   const f$ = n => `$${n.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}`;
   const fC = (n,s) => `${s}${n.toLocaleString(numLocale(currency.code),{minimumFractionDigits:2,maximumFractionDigits:2})}`;
   const fD = s => s ? new Date(s).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}) : "—";
@@ -319,6 +330,7 @@ async function exportQuoteWord({cl,annualList,discTotal,subUSD,subLocal,taxLocal
     children: Array.isArray(children) ? children : [children],
     alignment: opts.align || AlignmentType.LEFT,
     spacing: { before: (opts.spaceBefore||0)*20, after: (opts.spaceAfter||6)*20 },
+    keepNext: opts.keepNext || false,
     ...(opts.heading ? { heading: opts.heading } : {}),
   });
 
@@ -415,33 +427,38 @@ async function exportQuoteWord({cl,annualList,discTotal,subUSD,subLocal,taxLocal
     margins:{top:cm(0.1),bottom:cm(0.1),left:cm(0.18),right:cm(0.18)},
   });
 
-  const theadRow = new TableRow({ children: [
+  const native = pricingMode === "native";
+  const fU = n => native ? fC(n,sym) : f$(n);
+  const unitColHeader = native ? `Unit Price (${currency.code})` : "Unit Price";
+  const netColHeader = native ? `Net (${currency.code})` : "Net (USD)";
+
+  const theadRow = new TableRow({ tableHeader: true, children: [
     thCell("Product / Service", AlignmentType.LEFT, colWidths[0]),
     thCell("Qty", AlignmentType.CENTER, colWidths[1]),
-    thCell("Unit Price", AlignmentType.RIGHT, colWidths[2]),
+    thCell(unitColHeader, AlignmentType.RIGHT, colWidths[2]),
     ...(hasDiscount ? [thCell("Discount", AlignmentType.RIGHT, colWidths[3])] : []),
-    thCell("Net (USD)", AlignmentType.RIGHT, colWidths[hasDiscount?4:3]),
+    thCell(netColHeader, AlignmentType.RIGHT, colWidths[hasDiscount?4:3]),
   ]});
 
   const dataRows = cl.map(l => {
     const isPro = l.productCategory==="professional_services";
-    const unitLabel = isPro ? (l.hideRate ? "—" : `${f$(l.ratePerHour||0)}/hr`) : f$(l.item?.unitPrice||0);
+    const unitLabel = (isPro && l.hideRate) ? "—" : `${fU(l.unitResolved)}${isPro?"/hr":""}`;
     const qtyLabel  = isPro ? `${l.qty} hrs` : `${l.qty}`;
-    return new TableRow({ children: [
+    return new TableRow({ cantSplit: true, children: [
       cell([para([
         run(l.item?.name||"",{bold:true,size:10}),
         ...(l.item?.description ? [run("\n"+l.item.description,{size:8.5,color:SLATE})] : []),
       ])], {width:colWidths[0]}),
       cell([para([run(qtyLabel,{size:10})],{align:AlignmentType.CENTER})], {width:colWidths[1]}),
       cell([para([run(unitLabel,{size:10})],{align:AlignmentType.RIGHT})], {width:colWidths[2]}),
-      ...(hasDiscount ? [cell([para([run(l.disc>0?`-${f$(l.disc)}`:"—",{size:10,color:l.disc>0?"DC2626":SLATE})],{align:AlignmentType.RIGHT})], {width:colWidths[3]})] : []),
-      cell([para([run(f$(l.net),{bold:true,size:10})],{align:AlignmentType.RIGHT})], {width:colWidths[hasDiscount?4:3]}),
+      ...(hasDiscount ? [cell([para([run(l.disc>0?`-${fU(l.disc)}`:"—",{size:10,color:l.disc>0?"DC2626":SLATE})],{align:AlignmentType.RIGHT})], {width:colWidths[3]})] : []),
+      cell([para([run(fU(l.net),{bold:true,size:10})],{align:AlignmentType.RIGHT})], {width:colWidths[hasDiscount?4:3]}),
     ]});
   });
 
   const subtotalRow = (label, value, bg="F8FAFC") => {
     const cols = hasDiscount ? 5 : 4;
-    return new TableRow({ children: [
+    return new TableRow({ cantSplit: true, children: [
       new TableCell({
         children:[new Paragraph({children:[run(label,{size:10,bold:true})],alignment:AlignmentType.RIGHT,spacing:{before:80,after:80}})],
         columnSpan:cols-1,
@@ -459,7 +476,7 @@ async function exportQuoteWord({cl,annualList,discTotal,subUSD,subLocal,taxLocal
   };
 
   const totalCols = hasDiscount ? 5 : 4;
-  const grandTotalRow = new TableRow({ children: [
+  const grandTotalRow = new TableRow({ cantSplit: true, children: [
     new TableCell({
       children:[new Paragraph({children:[run(`TOTAL (${currency.code})`,{size:12,bold:true,color:"FFFFFF"})],alignment:AlignmentType.RIGHT,spacing:{before:100,after:100}})],
       columnSpan:totalCols-1,
@@ -480,9 +497,11 @@ async function exportQuoteWord({cl,annualList,discTotal,subUSD,subLocal,taxLocal
     rows:[
       theadRow,
       ...dataRows,
-      subtotalRow("Sub-Total (USD)", f$(subUSD)),
-      ...(currency.code!=="USD"?[subtotalRow(`Sub-Total (${currency.code}) @ ${currency.rate.toFixed(4)}`,fC(subLocal,sym))]:[]),
-      ...(taxConfig.rate>0?[subtotalRow(`${taxConfig.label} (${taxConfig.rate}%)`,fC(taxLocal,sym))]:[]),
+      ...(showAnnualListPrice?[subtotalRow("Annual List Price", fU(annualList))]:[]),
+      ...(hasDiscount?[subtotalRow("Total Discount", `-${fU(discTotal)}`)]:[]),
+      subtotalRow(`Sub-Total (${native?currency.code:"USD"})`, native?fC(subLocal,sym):f$(subUSD)),
+      ...((currency.code!=="USD" && !native)?[subtotalRow(`Sub-Total (${currency.code}) @ ${currency.rate.toFixed(4)}`,fC(subLocal,sym))]:[]),
+      ...(taxConfig.rate>0?[subtotalRow(taxConfig.label,fC(taxLocal,sym))]:[]),
       grandTotalRow,
     ],
   });
@@ -493,24 +512,24 @@ async function exportQuoteWord({cl,annualList,discTotal,subUSD,subLocal,taxLocal
     new Table({
       width:{size:PAGE_W, type:WidthType.DXA},
       rows:[
-        new TableRow({ children: [
+        new TableRow({ tableHeader: true, children: [
           new TableCell({children:[para([run("Year",{bold:true,size:10,color:"FFFFFF"})],{align:AlignmentType.CENTER})],shading:{fill:NAVY,type:ShadingType.CLEAR},borders:{top:{style:BorderStyle.SINGLE,size:4,color:NAVY},bottom:{style:BorderStyle.SINGLE,size:4,color:NAVY},left:{style:BorderStyle.SINGLE,size:4,color:NAVY},right:{style:BorderStyle.SINGLE,size:4,color:NAVY}},margins:{top:cm(0.1),bottom:cm(0.1),left:cm(0.18),right:cm(0.18)},width:{size:1800,type:WidthType.DXA}}),
           new TableCell({children:[para([run(`Sub-Total (${currency.code})`,{bold:true,size:10,color:"FFFFFF"})],{align:AlignmentType.RIGHT})],shading:{fill:NAVY,type:ShadingType.CLEAR},borders:{top:{style:BorderStyle.SINGLE,size:4,color:NAVY},bottom:{style:BorderStyle.SINGLE,size:4,color:NAVY},left:{style:BorderStyle.SINGLE,size:4,color:NAVY},right:{style:BorderStyle.SINGLE,size:4,color:NAVY}},margins:{top:cm(0.1),bottom:cm(0.1),left:cm(0.18),right:cm(0.18)},width:{size:3000,type:WidthType.DXA}}),
           ...(taxConfig.rate > 0 ? [new TableCell({children:[para([run(`${taxConfig.label}`,{bold:true,size:10,color:"FFFFFF"})],{align:AlignmentType.RIGHT})],shading:{fill:NAVY,type:ShadingType.CLEAR},borders:{top:{style:BorderStyle.SINGLE,size:4,color:NAVY},bottom:{style:BorderStyle.SINGLE,size:4,color:NAVY},left:{style:BorderStyle.SINGLE,size:4,color:NAVY},right:{style:BorderStyle.SINGLE,size:4,color:NAVY}},margins:{top:cm(0.1),bottom:cm(0.1),left:cm(0.18),right:cm(0.18)},width:{size:2500,type:WidthType.DXA}})] : []),
-          new TableCell({children:[para([run(`Total (${currency.code})`,{bold:true,size:10,color:"FFFFFF"})],{align:AlignmentType.RIGHT})],shading:{fill:NAVY,type:ShadingType.CLEAR},borders:{top:{style:BorderStyle.SINGLE,size:4,color:NAVY},bottom:{style:BorderStyle.SINGLE,size:4,color:NAVY},left:{style:BorderStyle.SINGLE,size:4,color:NAVY},right:{style:BorderStyle.SINGLE,size:4,color:NAVY}},margins:{top:cm(0.1),bottom:cm(0.1),left:cm(0.18),right:cm(0.18)}}),
+          new TableCell({children:[para([run(`Total (${currency.code})`,{bold:true,size:10,color:"FFFFFF"})],{align:AlignmentType.RIGHT})],shading:{fill:NAVY,type:ShadingType.CLEAR},borders:{top:{style:BorderStyle.SINGLE,size:4,color:NAVY},bottom:{style:BorderStyle.SINGLE,size:4,color:NAVY},left:{style:BorderStyle.SINGLE,size:4,color:NAVY},right:{style:BorderStyle.SINGLE,size:4,color:NAVY}},margins:{top:cm(0.1),bottom:cm(0.1),left:cm(0.18),right:cm(0.18)},width:{size:PAGE_W-1800-3000-(taxConfig.rate>0?2500:0),type:WidthType.DXA}}),
         ]}),
         ...yearlyTotals.map((y, idx) => {
           const bg = idx % 2 === 0 ? "FFFFFF" : "F8FAFC";
           const taxAmt = y.subtotal * taxConfig.rate;
           const label = y.year === 1 ? "Year 1" : `Year ${y.year}${yearEscalation > 0 ? ` (+${yearEscalation}%)` : ""}`;
-          return new TableRow({ children: [
+          return new TableRow({ cantSplit: true, children: [
             new TableCell({children:[para([run(label,{bold:true,size:10})],{align:AlignmentType.CENTER})],shading:{fill:bg,type:ShadingType.CLEAR},borders:{top:{style:BorderStyle.SINGLE,size:4,color:BORDER_C},bottom:{style:BorderStyle.SINGLE,size:4,color:BORDER_C},left:{style:BorderStyle.SINGLE,size:4,color:BORDER_C},right:{style:BorderStyle.SINGLE,size:4,color:BORDER_C}},margins:{top:cm(0.08),bottom:cm(0.08),left:cm(0.18),right:cm(0.18)},width:{size:1800,type:WidthType.DXA}}),
             new TableCell({children:[para([run(fC(y.subtotal,sym),{size:10})],{align:AlignmentType.RIGHT})],shading:{fill:bg,type:ShadingType.CLEAR},borders:{top:{style:BorderStyle.SINGLE,size:4,color:BORDER_C},bottom:{style:BorderStyle.SINGLE,size:4,color:BORDER_C},left:{style:BorderStyle.SINGLE,size:4,color:BORDER_C},right:{style:BorderStyle.SINGLE,size:4,color:BORDER_C}},margins:{top:cm(0.08),bottom:cm(0.08),left:cm(0.18),right:cm(0.18)},width:{size:3000,type:WidthType.DXA}}),
             ...(taxConfig.rate > 0 ? [new TableCell({children:[para([run(fC(taxAmt,sym),{size:10})],{align:AlignmentType.RIGHT})],shading:{fill:bg,type:ShadingType.CLEAR},borders:{top:{style:BorderStyle.SINGLE,size:4,color:BORDER_C},bottom:{style:BorderStyle.SINGLE,size:4,color:BORDER_C},left:{style:BorderStyle.SINGLE,size:4,color:BORDER_C},right:{style:BorderStyle.SINGLE,size:4,color:BORDER_C}},margins:{top:cm(0.08),bottom:cm(0.08),left:cm(0.18),right:cm(0.18)},width:{size:2500,type:WidthType.DXA}})] : []),
-            new TableCell({children:[para([run(fC(y.grand,sym),{bold:true,size:10})],{align:AlignmentType.RIGHT})],shading:{fill:bg,type:ShadingType.CLEAR},borders:{top:{style:BorderStyle.SINGLE,size:4,color:BORDER_C},bottom:{style:BorderStyle.SINGLE,size:4,color:BORDER_C},left:{style:BorderStyle.SINGLE,size:4,color:BORDER_C},right:{style:BorderStyle.SINGLE,size:4,color:BORDER_C}},margins:{top:cm(0.08),bottom:cm(0.08),left:cm(0.18),right:cm(0.18)}}),
+            new TableCell({children:[para([run(fC(y.grand,sym),{bold:true,size:10})],{align:AlignmentType.RIGHT})],shading:{fill:bg,type:ShadingType.CLEAR},borders:{top:{style:BorderStyle.SINGLE,size:4,color:BORDER_C},bottom:{style:BorderStyle.SINGLE,size:4,color:BORDER_C},left:{style:BorderStyle.SINGLE,size:4,color:BORDER_C},right:{style:BorderStyle.SINGLE,size:4,color:BORDER_C}},margins:{top:cm(0.08),bottom:cm(0.08),left:cm(0.18),right:cm(0.18)},width:{size:PAGE_W-1800-3000-(taxConfig.rate>0?2500:0),type:WidthType.DXA}}),
           ]});
         }),
-        new TableRow({ children: [
+        new TableRow({ cantSplit: true, children: [
           new TableCell({children:[para([run("TOTAL CONTRACT VALUE",{bold:true,size:11,color:"FFFFFF"})],{align:AlignmentType.RIGHT})],columnSpan: taxConfig.rate > 0 ? 3 : 2,shading:{fill:NAVY,type:ShadingType.CLEAR},borders:{top:{style:BorderStyle.SINGLE,size:4,color:NAVY},bottom:{style:BorderStyle.SINGLE,size:4,color:NAVY},left:{style:BorderStyle.SINGLE,size:4,color:NAVY},right:{style:BorderStyle.SINGLE,size:4,color:NAVY}},margins:{top:cm(0.1),bottom:cm(0.1),left:cm(0.18),right:cm(0.18)}}),
           new TableCell({children:[para([run(fC(totalContractValue,sym),{bold:true,size:13,color:"FFFFFF"})],{align:AlignmentType.RIGHT})],shading:{fill:NAVY,type:ShadingType.CLEAR},borders:{top:{style:BorderStyle.SINGLE,size:4,color:NAVY},bottom:{style:BorderStyle.SINGLE,size:4,color:NAVY},left:{style:BorderStyle.SINGLE,size:4,color:NAVY},right:{style:BorderStyle.SINGLE,size:4,color:NAVY}},margins:{top:cm(0.1),bottom:cm(0.1),left:cm(0.18),right:cm(0.18)}}),
         ]}),
@@ -523,7 +542,7 @@ async function exportQuoteWord({cl,annualList,discTotal,subUSD,subLocal,taxLocal
   const sigTable = new Table({
     width:{size:PAGE_W,type:WidthType.DXA},
     borders:{top:{style:BorderStyle.NONE},bottom:{style:BorderStyle.NONE},left:{style:BorderStyle.NONE},right:{style:BorderStyle.NONE},insideH:{style:BorderStyle.NONE},insideV:{style:BorderStyle.NONE}},
-    rows:[new TableRow({children:[
+    rows:[new TableRow({cantSplit:true,children:[
       cell(sigFields.reduce((acc,lbl)=>{
         acc.push(para([run(lbl,{size:8.5,color:SLATE})],{spaceAfter:2}));
         acc.push(para([run(lbl==="Company Name"?(customer.company||""):lbl==="Signature"?" ":" ",{size:10})],{spaceAfter:8}));
@@ -560,8 +579,8 @@ async function exportQuoteWord({cl,annualList,discTotal,subUSD,subLocal,taxLocal
       para([run("Notes",{bold:true,size:13,color:NAVY})],{spaceBefore:12,spaceAfter:4}),
       para([run(qd.notes,{size:10})]),
     ]:[]),
-    para([run("Acceptance & Authorisation",{bold:true,size:13,color:NAVY})],{spaceBefore:12,spaceAfter:4}),
-    para([run(`By signing below, both parties agree to the terms and pricing in quotation ${qd.quoteId}. Payment Terms: ${paymentTerms}. Subscription period: ${fD(startDate)} to ${fD(endDate)}.`,{size:9.5,color:SLATE})],{spaceAfter:8}),
+    para([run("Acceptance & Authorisation",{bold:true,size:13,color:NAVY})],{spaceBefore:12,spaceAfter:4,keepNext:true}),
+    para([run(`By signing below, both parties agree to the terms and pricing in quotation ${qd.quoteId}. Payment Terms: ${paymentTerms}. Subscription period: ${fD(startDate)} to ${fD(endDate)}.`,{size:9.5,color:SLATE})],{spaceAfter:8,keepNext:true}),
     sigTable,
     para([run("Questions? Contact your Virtuos Digital representative  ·  sales@virtuos.com  ·  www.virtuos.com",{size:8,color:"94A3B8"})],{spaceBefore:12,align:AlignmentType.CENTER}),
   ];
@@ -589,7 +608,7 @@ async function exportQuoteWord({cl,annualList,discTotal,subUSD,subLocal,taxLocal
   setTimeout(()=>URL.revokeObjectURL(url),10000);
 }
 
-async function exportQuoteHTML({cl,annualList,discTotal,subUSD,subLocal,taxLocal,grandLocal,customer,qd,currency,billingCycle,monthCount,startDate,endDate,taxConfig,paymentTerms,cats,sym,contractYears=1,yearEscalation=0,yearlyTotals=[],totalContractValue=0,hideDiscount=false}) {
+async function exportQuoteHTML({cl,annualList,discTotal,subUSD,subLocal,taxLocal,grandLocal,customer,qd,currency,billingCycle,monthCount,startDate,endDate,taxConfig,paymentTerms,cats,sym,contractYears=1,yearEscalation=0,yearlyTotals=[],totalContractValue=0,hideDiscount=false,pricingMode="usd"}) {
   const f$ = n => `$${n.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}`;
   const fC = (n,s) => `${s}${n.toLocaleString(numLocale(currency.code),{minimumFractionDigits:2,maximumFractionDigits:2})}`;
   const fD = s => s ? new Date(s).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}) : "—";
@@ -603,6 +622,10 @@ async function exportQuoteHTML({cl,annualList,discTotal,subUSD,subLocal,taxLocal
   const rawHasDiscount = cl.some(l=>l.disc>0);
   const hasDiscount = rawHasDiscount && !hideDiscount;
   const showAnnualListPrice = !rawHasDiscount || !hideDiscount;
+  const native = pricingMode==="native";
+  const fU = n => native ? fC(n,sym) : f$(n);
+  const unitColLabel = native ? `Unit Price (${currency.code}/yr)` : "Unit Price (USD/yr)";
+  const netColLabel = native ? `Net Amount (${currency.code})` : "Net Amount (USD)";
   const tableRows = cl.map((l,i) => `
     <tr style="background:${i%2===0?"#fff":"#F8FAFC"}">
       <td style="padding:10px 13px;border-bottom:1px solid #F1F5F9;">
@@ -616,18 +639,18 @@ async function exportQuoteHTML({cl,annualList,discTotal,subUSD,subLocal,taxLocal
         </div>
       </td>
       <td style="padding:10px 13px;text-align:right;color:#64748B;font-weight:500;border-bottom:1px solid #F1F5F9;">${l.isPro?`${l.qty} hrs`:l.qty}</td>
-      <td style="padding:10px 13px;text-align:right;color:#64748B;border-bottom:1px solid #F1F5F9;">${l.isPro?(l.hideRate?"—":`${f$(l.ratePerHour||0)}/hr`):f$(l.item?.unitPrice||0)}</td>
+      <td style="padding:10px 13px;text-align:right;color:#64748B;border-bottom:1px solid #F1F5F9;">${l.isPro&&l.hideRate?"—":`${fU(l.unitResolved)}${l.isPro?"/hr":""}`}</td>
       ${hasDiscount?`<td style="padding:10px 13px;text-align:right;color:${l.disc>0?"#DC2626":"#94A3B8"};border-bottom:1px solid #F1F5F9;">
-        ${l.disc>0?`-${f$(l.disc)}${l.discountType==="percent"?`<div style="font-size:9.5px;color:#94A3B8">${l.discount}% off</div>`:""}`:"—"}
+        ${l.disc>0?`-${fU(l.disc)}${l.discountType==="percent"?`<div style="font-size:9.5px;color:#94A3B8">${l.discount}% off</div>`:""}`:"—"}
       </td>`:""}
-      <td style="padding:10px 13px;text-align:right;font-weight:800;color:#1E293B;font-size:14px;border-bottom:1px solid #F1F5F9;">${f$(l.net)}</td>
+      <td style="padding:10px 13px;text-align:right;font-weight:800;color:#1E293B;font-size:14px;border-bottom:1px solid #F1F5F9;">${fU(l.net)}</td>
     </tr>`).join("");
 
   const summaryRows = cl.map((l,i) => `
     <tr style="background:${i%2===0?"#F8FAFC":"#fff"}">
       <td style="padding:8px 16px;font-weight:600;color:#1E293B;font-size:12px;border-bottom:1px solid #E2E8F0;">${l.item?.name||""}</td>
       <td style="padding:8px 16px;text-align:right;color:#64748B;font-size:12px;border-bottom:1px solid #E2E8F0;">${l.qty}</td>
-      <td style="padding:8px 16px;text-align:right;font-weight:700;color:#1E293B;font-size:12px;border-bottom:1px solid #E2E8F0;">${f$(l.net)}</td>
+      <td style="padding:8px 16px;text-align:right;font-weight:700;color:#1E293B;font-size:12px;border-bottom:1px solid #E2E8F0;">${fU(l.net)}</td>
     </tr>`).join("");
 
   const tcBlocks = cats.map(cat => `
@@ -748,9 +771,9 @@ async function exportQuoteHTML({cl,annualList,discTotal,subUSD,subLocal,taxLocal
         <tr style="background:#0D1B3E;">
           <th style="padding:9px 13px;text-align:left;font-weight:700;color:#fff;font-size:10px;text-transform:uppercase;letter-spacing:0.06em;">Product / Description</th>
           <th style="padding:9px 13px;text-align:right;font-weight:700;color:#fff;font-size:10px;text-transform:uppercase;letter-spacing:0.06em;">Qty</th>
-          <th style="padding:9px 13px;text-align:right;font-weight:700;color:#fff;font-size:10px;text-transform:uppercase;letter-spacing:0.06em;">Unit Price (USD/yr)</th>
+          <th style="padding:9px 13px;text-align:right;font-weight:700;color:#fff;font-size:10px;text-transform:uppercase;letter-spacing:0.06em;">${unitColLabel}</th>
           ${hasDiscount?`<th style="padding:9px 13px;text-align:right;font-weight:700;color:#fff;font-size:10px;text-transform:uppercase;letter-spacing:0.06em;">Discount</th>`:""}
-          <th style="padding:9px 13px;text-align:right;font-weight:700;color:#fff;font-size:10px;text-transform:uppercase;letter-spacing:0.06em;">Net Amount (USD)</th>
+          <th style="padding:9px 13px;text-align:right;font-weight:700;color:#fff;font-size:10px;text-transform:uppercase;letter-spacing:0.06em;">${netColLabel}</th>
         </tr>
       </thead>
       <tbody>${tableRows}</tbody>
@@ -760,14 +783,14 @@ async function exportQuoteHTML({cl,annualList,discTotal,subUSD,subLocal,taxLocal
     <div style="display:flex;justify-content:flex-end;margin-bottom:16px;">
       <div style="width:310px;background:#F8FAFC;border-radius:12px;overflow:hidden;border:1px solid #E2E8F0;">
         <div style="padding:13px 14px;border-bottom:1px solid #E2E8F0;">
-          <div style="font-size:10px;font-weight:800;color:#94A3B8;text-transform:uppercase;letter-spacing:0.09em;margin-bottom:7px;">USD Summary</div>
+          <div style="font-size:10px;font-weight:800;color:#94A3B8;text-transform:uppercase;letter-spacing:0.09em;margin-bottom:7px;">${native?`${currency.code} Summary`:"USD Summary"}</div>
           <table>
-            ${showAnnualListPrice?`<tr><td style="padding:3px 0;font-size:12.5px;color:#64748B;">Annual List Price</td><td style="padding:3px 0;text-align:right;font-size:12.5px;font-weight:600;color:#1E293B;">${f$(annualList)}</td></tr>`:""}
-            ${hasDiscount?`<tr><td style="padding:3px 0;font-size:12.5px;color:#64748B;">Total Discount</td><td style="padding:3px 0;text-align:right;font-size:12.5px;font-weight:600;color:#DC2626;">-${f$(discTotal)}</td></tr>`:""}
-            <tr style="border-top:1px dashed #E2E8F0;"><td style="padding:7px 0 3px;font-size:13px;font-weight:700;color:#1E293B;">Sub-Total (USD)</td><td style="padding:7px 0 3px;text-align:right;font-size:14px;font-weight:800;color:#1E293B;">${f$(subUSD)}</td></tr>
+            ${showAnnualListPrice?`<tr><td style="padding:3px 0;font-size:12.5px;color:#64748B;">Annual List Price</td><td style="padding:3px 0;text-align:right;font-size:12.5px;font-weight:600;color:#1E293B;">${fU(annualList)}</td></tr>`:""}
+            ${hasDiscount?`<tr><td style="padding:3px 0;font-size:12.5px;color:#64748B;">Total Discount</td><td style="padding:3px 0;text-align:right;font-size:12.5px;font-weight:600;color:#DC2626;">-${fU(discTotal)}</td></tr>`:""}
+            <tr style="border-top:1px dashed #E2E8F0;"><td style="padding:7px 0 3px;font-size:13px;font-weight:700;color:#1E293B;">Sub-Total (${native?currency.code:"USD"})</td><td style="padding:7px 0 3px;text-align:right;font-size:14px;font-weight:800;color:#1E293B;">${native?fC(subLocal,sym):f$(subUSD)}</td></tr>
           </table>
         </div>
-        ${currency.code!=="USD" ? `<div style="padding:12px 14px;border-bottom:1px solid #E2E8F0;background:#EFF6FF;">
+        ${(currency.code!=="USD" && !native) ? `<div style="padding:12px 14px;border-bottom:1px solid #E2E8F0;background:#EFF6FF;">
           <div style="font-size:10px;font-weight:800;color:#94A3B8;text-transform:uppercase;letter-spacing:0.09em;margin-bottom:7px;">Currency Conversion</div>
           <table>
             <tr><td style="padding:3px 0;font-size:12.5px;color:#64748B;">FX Rate (1 USD → ${currency.code})</td><td style="padding:3px 0;text-align:right;font-size:12.5px;font-weight:600;color:#1E293B;">${currency.rate.toFixed(2)}</td></tr>
@@ -780,7 +803,7 @@ async function exportQuoteHTML({cl,annualList,discTotal,subUSD,subLocal,taxLocal
             <span style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.65);text-transform:uppercase;letter-spacing:0.05em;">Total Amount (${currency.code})</span>
             <span style="font-size:22px;font-weight:900;color:#fff;">${fC(grandLocal,sym)}</span>
           </div>
-          ${currency.code!=="USD" ? `<div style="font-size:11px;color:rgba(255,255,255,0.35);text-align:right;margin-top:2px;">≈ ${f$(subUSD)} USD excl. tax</div>` : ""}
+          ${(currency.code!=="USD" && !native) ? `<div style="font-size:11px;color:rgba(255,255,255,0.35);text-align:right;margin-top:2px;">≈ ${f$(subUSD)} USD excl. tax</div>` : ""}
         </div>
       </div>
     </div>
@@ -857,7 +880,7 @@ async function exportQuoteHTML({cl,annualList,discTotal,subUSD,subLocal,taxLocal
         <thead><tr style="background:#0D1B3E;">
           <th style="padding:9px 16px;text-align:left;font-size:10px;font-weight:700;color:rgba(255,255,255,0.6);text-transform:uppercase;letter-spacing:0.07em;">Product</th>
           <th style="padding:9px 16px;text-align:right;font-size:10px;font-weight:700;color:rgba(255,255,255,0.6);text-transform:uppercase;letter-spacing:0.07em;">Qty</th>
-          <th style="padding:9px 16px;text-align:right;font-size:10px;font-weight:700;color:rgba(255,255,255,0.6);text-transform:uppercase;letter-spacing:0.07em;">Net (USD)</th>
+          <th style="padding:9px 16px;text-align:right;font-size:10px;font-weight:700;color:rgba(255,255,255,0.6);text-transform:uppercase;letter-spacing:0.07em;">${netColLabel}</th>
         </tr></thead>
         <tbody>${summaryRows}</tbody>
         <tfoot><tr style="background:#0D1B3E;">
@@ -883,7 +906,7 @@ async function exportQuoteHTML({cl,annualList,discTotal,subUSD,subLocal,taxLocal
       <div style="height:1px;flex:1;background:linear-gradient(90deg,transparent,#E2E8F0);"></div>
     </div>
 
-    <p style="font-size:12px;color:#475569;line-height:1.7;margin:0 0 16px;">By signing below, both parties agree to the terms and pricing set forth in this quotation (reference <strong>${qd.quoteId}</strong>), subject to the Terms &amp; Conditions above. This document constitutes a binding order upon counter-signature by an authorised Virtuos Digital representative. The subscription period will commence on <strong>${fD(startDate)}</strong> and expire on <strong>${fD(endDate)}</strong>. All pricing is in USD unless otherwise stated.</p>
+    <p style="font-size:12px;color:#475569;line-height:1.7;margin:0 0 16px;">By signing below, both parties agree to the terms and pricing set forth in this quotation (reference <strong>${qd.quoteId}</strong>), subject to the Terms &amp; Conditions above. This document constitutes a binding order upon counter-signature by an authorised Virtuos Digital representative. The subscription period will commence on <strong>${fD(startDate)}</strong> and expire on <strong>${fD(endDate)}</strong>. All pricing is in ${currency.code} unless otherwise stated.</p>
 
     <!-- Signature blocks -->
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px;">
@@ -947,15 +970,16 @@ async function exportQuoteHTML({cl,annualList,discTotal,subUSD,subLocal,taxLocal
 
 // ─── QUOTE PREVIEW / EXPORT ──────────────────────────────────────────────────
 function QuotePreview({data,onClose}){
-  const {lines,customer,qd,currency,billingCycle,monthCount,startDate,endDate,taxConfig,paymentTerms,contractYears=1,yearEscalation=0,yearlyTotals=[],totalContractValue=0,hideDiscount=false}=data;
+  const {lines,customer,qd,currency,billingCycle,monthCount,startDate,endDate,taxConfig,paymentTerms,contractYears=1,yearEscalation=0,yearlyTotals=[],totalContractValue=0,hideDiscount=false,pricingMode="usd"}=data;
   const sym=currency.symbol;
   const lcl = n => fmtC(n, sym, currency.code);
-  const cl=computeLines(lines,startDate,endDate,billingCycle);
+  const cl=computeLines(lines,startDate,endDate,billingCycle,pricingMode,currency.rate);
 
   const annualList  = cl.reduce((s,l)=>s+l.annual,0);
   const discTotal   = cl.reduce((s,l)=>s+l.disc,0);
-  const subUSD      = cl.reduce((s,l)=>s+l.net,0);
-  const subLocal    = subUSD*currency.rate;
+  const subNative   = cl.reduce((s,l)=>s+l.net,0);
+  const subUSD      = pricingMode==="native" ? (currency.code==="USD" ? subNative : subNative/currency.rate) : subNative;
+  const subLocal    = pricingMode==="native" ? subNative : subUSD*currency.rate;
   const taxLocal    = subLocal*taxConfig.rate;
   const grandLocal  = subLocal+taxLocal;
 
@@ -1041,8 +1065,8 @@ function QuotePreview({data,onClose}){
           <div style={{overflowX:"auto",marginBottom:"24px",borderRadius:"10px",border:"1px solid #E2E8F0"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:"clamp(10px,1.5vw,12.5px)",minWidth:"480px"}}>
             <thead>
               <tr style={{background:"#0D1B3E"}}>
-                {["Product / Description","Qty","Unit Price (USD/yr)",...(hasDiscount?["Discount"]:[]),"Net Amount (USD)"].map((h,i)=>(
-                  <th key={h} style={{padding:"10px 13px",textAlign:i===0?"left":"right",fontWeight:700,color:"#fff",fontSize:"10px",textTransform:"uppercase",letterSpacing:"0.06em",whiteSpace:"nowrap"}} className={h==="Unit Price (USD/yr)"?"qp-table-hide":""}>
+                {["Product / Description","Qty",`Unit Price (${pricingMode==="native"?currency.code:"USD"}/yr)`,...(hasDiscount?["Discount"]:[]),`Net Amount (${pricingMode==="native"?currency.code:"USD"})`].map((h,i)=>(
+                  <th key={h} style={{padding:"10px 13px",textAlign:i===0?"left":"right",fontWeight:700,color:"#fff",fontSize:"10px",textTransform:"uppercase",letterSpacing:"0.06em",whiteSpace:"nowrap"}} className={h.startsWith("Unit Price")&&pricingMode!=="native"?"qp-table-hide":""}>
                     {h}
                   </th>
                 ))}
@@ -1068,14 +1092,14 @@ function QuotePreview({data,onClose}){
                       </div>
                     </td>
                     <td style={{padding:"11px 13px",textAlign:"right",color:V.muted,fontWeight:500}}>{l.isPro?`${l.qty} hrs`:l.qty}</td>
-                    <td style={{padding:"11px 13px",textAlign:"right",color:V.muted}} className="qp-table-hide">{l.isPro?(l.hideRate?"—":`${fmt$(l.ratePerHour||0)}/hr`):fmt$(l.item?.unitPrice||0)}</td>
+                    <td style={{padding:"11px 13px",textAlign:"right",color:V.muted}} className={pricingMode==="native"?"":"qp-table-hide"}>{l.isPro&&l.hideRate?"—":`${pricingMode==="native"?lcl(l.unitResolved):fmt$(l.unitResolved)}${l.isPro?"/hr":""}`}</td>
                     {hasDiscount&&(
                       <td style={{padding:"11px 13px",textAlign:"right",color:l.disc>0?"#DC2626":"#94A3B8"}}>
-                        {l.disc>0?`-${fmt$(l.disc)}`:"-"}
+                        {l.disc>0?`-${pricingMode==="native"?lcl(l.disc):fmt$(l.disc)}`:"-"}
                         {l.disc>0&&l.discountType==="percent"&&<div style={{fontSize:"9.5px",color:"#94A3B8"}}>{l.discount}% off</div>}
                       </td>
                     )}
-                    <td style={{padding:"11px 13px",textAlign:"right",fontWeight:800,color:V.ink,fontSize:"14px"}}>{fmt$(l.net)}</td>
+                    <td style={{padding:"11px 13px",textAlign:"right",fontWeight:800,color:V.ink,fontSize:"14px"}}>{pricingMode==="native"?lcl(l.net):fmt$(l.net)}</td>
                   </tr>
                 );
               })}
@@ -1085,12 +1109,12 @@ function QuotePreview({data,onClose}){
           {/* Totals + conversion */}
           <div style={{display:"flex",justifyContent:"flex-end",marginBottom:"28px"}}>
             <div style={{width:"min(320px,100%)",background:"#F8FAFC",borderRadius:"12px",overflow:"hidden",border:"1px solid #E2E8F0"}}>
-              {/* USD section */}
+              {/* Summary section */}
               <div style={{padding:"14px 16px",borderBottom:"1px solid #E2E8F0"}}>
-                <div style={{fontSize:"10px",fontWeight:800,color:"#94A3B8",textTransform:"uppercase",letterSpacing:"0.09em",marginBottom:"8px"}}>USD Summary</div>
+                <div style={{fontSize:"10px",fontWeight:800,color:"#94A3B8",textTransform:"uppercase",letterSpacing:"0.09em",marginBottom:"8px"}}>{pricingMode==="native"?`${currency.code} Summary`:"USD Summary"}</div>
                 {[
-                  ...(showAnnualListPrice?[["Annual List Price", fmt$(annualList)]]:[]),
-                  ...(hasDiscount?[["Total Discount", `-${fmt$(discTotal)}`, "#DC2626"]]:[]),
+                  ...(showAnnualListPrice?[["Annual List Price", pricingMode==="native"?lcl(annualList):fmt$(annualList)]]:[]),
+                  ...(hasDiscount?[["Total Discount", `-${pricingMode==="native"?lcl(discTotal):fmt$(discTotal)}`, "#DC2626"]]:[]),
                 ].map(([l,v,c])=>(
                   <div key={l} style={{display:"flex",justifyContent:"space-between",padding:"3px 0"}}>
                     <span style={{fontSize:"12.5px",color:V.muted}}>{l}</span>
@@ -1098,13 +1122,13 @@ function QuotePreview({data,onClose}){
                   </div>
                 ))}
                 <div style={{display:"flex",justifyContent:"space-between",padding:"6px 0 0",borderTop:"1px dashed #E2E8F0",marginTop:"4px"}}>
-                  <span style={{fontSize:"13px",fontWeight:700,color:V.ink}}>Sub-Total (USD)</span>
-                  <span style={{fontSize:"14px",fontWeight:800,color:V.ink}}>{fmt$(subUSD)}</span>
+                  <span style={{fontSize:"13px",fontWeight:700,color:V.ink}}>Sub-Total ({pricingMode==="native"?currency.code:"USD"})</span>
+                  <span style={{fontSize:"14px",fontWeight:800,color:V.ink}}>{pricingMode==="native"?lcl(subLocal):fmt$(subUSD)}</span>
                 </div>
               </div>
 
               {/* Conversion section */}
-              {currency.code!=="USD"&&(
+              {currency.code!=="USD"&&pricingMode!=="native"&&(
                 <div style={{padding:"14px 16px",borderBottom:"1px solid #E2E8F0",background:"#EFF6FF"}}>
                   <div style={{fontSize:"10px",fontWeight:800,color:"#94A3B8",textTransform:"uppercase",letterSpacing:"0.09em",marginBottom:"8px"}}>Currency Conversion</div>
                   {[
@@ -1131,7 +1155,7 @@ function QuotePreview({data,onClose}){
                   <span style={{fontSize:"12px",fontWeight:700,color:"rgba(255,255,255,0.7)",textTransform:"uppercase",letterSpacing:"0.05em"}}>Total Amount ({currency.code})</span>
                   <span style={{fontSize:"22px",fontWeight:900,color:"#fff"}}>{lcl(grandLocal)}</span>
                 </div>
-                {currency.code!=="USD"&&<div style={{fontSize:"11px",color:"rgba(255,255,255,0.4)",textAlign:"right",marginTop:"2px"}}>≈ {fmt$(subUSD)} USD excl. tax</div>}
+                {currency.code!=="USD"&&pricingMode!=="native"&&<div style={{fontSize:"11px",color:"rgba(255,255,255,0.4)",textAlign:"right",marginTop:"2px"}}>≈ {fmt$(subUSD)} USD excl. tax</div>}
               </div>
             </div>
           </div>
@@ -1206,7 +1230,7 @@ function QuotePreview({data,onClose}){
           {/* Compact summary table for page 2 */}
           <div style={{background:"#F8FAFC",borderRadius:"10px",border:"1px solid #E2E8F0",overflow:"auto",marginBottom:"16px"}}>
             <div style={{background:"#0D1B3E",padding:"10px 16px",display:"grid",gridTemplateColumns:"2fr 1fr 1fr",gap:"8px",minWidth:0}}>
-              {["Product","Qty","Net (USD)"].map(h=>(
+              {["Product","Qty",`Net (${pricingMode==="native"?currency.code:"USD"})`].map(h=>(
                 <div key={h} style={{fontSize:"10px",fontWeight:700,color:"rgba(255,255,255,0.6)",textTransform:"uppercase",letterSpacing:"0.07em",textAlign:h==="Product"?"left":"right"}}>{h}</div>
               ))}
             </div>
@@ -1214,7 +1238,7 @@ function QuotePreview({data,onClose}){
               <div key={i} style={{padding:"8px 16px",display:"grid",gridTemplateColumns:"2fr 1fr 1fr",gap:"8px",minWidth:0,borderBottom:"1px solid #E2E8F0",background:i%2?"#fff":"#F8FAFC"}}>
                 <div style={{fontSize:"12px",fontWeight:600,color:V.ink}}>{l.item?.name}</div>
                 <div style={{fontSize:"12px",color:V.muted,textAlign:"right"}}>{l.qty}</div>
-                <div style={{fontSize:"12px",fontWeight:700,color:V.ink,textAlign:"right"}}>{fmt$(l.net)}</div>
+                <div style={{fontSize:"12px",fontWeight:700,color:V.ink,textAlign:"right"}}>{pricingMode==="native"?lcl(l.net):fmt$(l.net)}</div>
               </div>
             ))}
             <div style={{padding:"12px 16px",display:"flex",justifyContent:"space-between",alignItems:"center",background:"#0D1B3E"}}>
@@ -1242,7 +1266,7 @@ function QuotePreview({data,onClose}){
           {sectionHeader("Acceptance & Authorisation")}
 
           <p style={{fontSize:"12px",color:"#475569",lineHeight:1.7,margin:"0 0 16px"}}>
-            By signing below, both parties agree to the terms and pricing set forth in this quotation (reference <strong>{qd.quoteId}</strong>), subject to the Terms & Conditions above. This document constitutes a binding order upon counter-signature by an authorised Virtuos Digital representative. The subscription period will commence on <strong>{fmtDate(startDate)}</strong> and expire on <strong>{fmtDate(endDate)}</strong>. All pricing is in USD unless otherwise stated.
+            By signing below, both parties agree to the terms and pricing set forth in this quotation (reference <strong>{qd.quoteId}</strong>), subject to the Terms & Conditions above. This document constitutes a binding order upon counter-signature by an authorised Virtuos Digital representative. The subscription period will commence on <strong>{fmtDate(startDate)}</strong> and expire on <strong>{fmtDate(endDate)}</strong>. All pricing is in {currency.code} unless otherwise stated.
           </p>
 
           {/* Signature blocks */}
@@ -1309,11 +1333,11 @@ function QuotePreview({data,onClose}){
         {/* Modal action bar */}
         <div className="qp-action-bar">
           <button onClick={onClose} style={{padding:"9px 20px",border:`1.5px solid ${V.border}`,borderRadius:"8px",background:"#fff",cursor:"pointer",fontSize:"13px",fontWeight:600,color:V.ink,fontFamily:"inherit"}}>Close</button>
-          <button onClick={()=>exportQuoteWord({cl,annualList,discTotal,subUSD,subLocal,taxLocal,grandLocal,customer,qd,currency,billingCycle,monthCount,startDate,endDate,taxConfig,paymentTerms,cats,sym,contractYears,yearEscalation,yearlyTotals,totalContractValue,hideDiscount})}
+          <button onClick={()=>exportQuoteWord({cl,annualList,discTotal,subUSD,subLocal,taxLocal,grandLocal,customer,qd,currency,billingCycle,monthCount,startDate,endDate,taxConfig,paymentTerms,cats,sym,contractYears,yearEscalation,yearlyTotals,totalContractValue,hideDiscount,pricingMode})}
             style={{padding:"9px 22px",background:"linear-gradient(135deg,#1D4ED8,#2563EB)",color:"#fff",border:"none",borderRadius:"8px",cursor:"pointer",fontSize:"13px",fontWeight:700,boxShadow:"0 4px 12px rgba(29,78,216,0.35)",fontFamily:"inherit"}}>
             📄 Export Word (.doc)
           </button>
-          <button onClick={()=>exportQuoteHTML({cl,annualList,discTotal,subUSD,subLocal,taxLocal,grandLocal,customer,qd,currency,billingCycle,monthCount,startDate,endDate,taxConfig,paymentTerms,cats,sym,contractYears,yearEscalation,yearlyTotals,totalContractValue,hideDiscount})}
+          <button onClick={()=>exportQuoteHTML({cl,annualList,discTotal,subUSD,subLocal,taxLocal,grandLocal,customer,qd,currency,billingCycle,monthCount,startDate,endDate,taxConfig,paymentTerms,cats,sym,contractYears,yearEscalation,yearlyTotals,totalContractValue,hideDiscount,pricingMode})}
             style={{padding:"9px 22px",background:"linear-gradient(135deg,#0D1B3E,#1A2C55)",color:"#fff",border:"none",borderRadius:"8px",cursor:"pointer",fontSize:"13px",fontWeight:700,boxShadow:"0 4px 12px rgba(13,27,62,0.35)",fontFamily:"inherit"}}>
             🖨 Export / Print PDF
           </button>
@@ -2810,6 +2834,7 @@ export default function QuoteBuilder({ user, onSignOut }) {
   const [contractYears,  setContractYears]  = useState(1);
   const [yearEscalation, setYearEscalation] = useState(0);
   const [hideDiscount,   setHideDiscount]   = useState(false);
+  const [pricingMode,    setPricingMode]    = useState("usd");
   const [showPreview,    setShowPreview]    = useState(false);
 
   useEffect(() => {
@@ -2845,18 +2870,20 @@ export default function QuoteBuilder({ user, onSignOut }) {
     setQd({ quoteId: generateQuoteId(), quoteName: "", createdOn: new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}), owner: "", notes: "", validUntil: "" });
     setCurrency(CURRENCIES[0]); setBillingCycle("annual"); setMonthCount(12);
     setStartDate(today); setEndDate(autoEndDate(today,"annual",12)); setTaxConfig(TAX_RATES[0]);
-    setContractYears(1); setYearEscalation(0); setHideDiscount(false);
+    setContractYears(1); setYearEscalation(0); setHideDiscount(false); setPricingMode("usd");
   }
 
   function saveCurrentQuote() {
-    const cl = computeLines(lines, startDate, endDate, billingCycle);
-    const subUSD = cl.reduce((s, l) => s + l.net, 0);
+    const cl = computeLines(lines, startDate, endDate, billingCycle, pricingMode, currency.rate);
+    const subNative = cl.reduce((s, l) => s + l.net, 0);
+    const subUSD = pricingMode === "native" ? (currency.code === "USD" ? subNative : subNative / currency.rate) : subNative;
+    const subLocal = pricingMode === "native" ? subNative : subUSD * currency.rate;
     const snapshot = {
       id: qd.quoteId, quoteName: qd.quoteName, createdOn: qd.createdOn, validUntil: qd.validUntil,
       owner: qd.owner || user?.user_metadata?.full_name || user?.email, notes: qd.notes,
       customer, currency, billingCycle, monthCount, startDate, endDate, taxConfig, paymentTerms,
-      lines, subUSD, grandLocal: subUSD * currency.rate, accountId,
-      contractYears, yearEscalation, hideDiscount,
+      lines, subUSD, grandLocal: subLocal, accountId,
+      contractYears, yearEscalation, hideDiscount, pricingMode,
     };
     upsertQuote(snapshot, user, accountId);
   }
@@ -2876,6 +2903,7 @@ export default function QuoteBuilder({ user, onSignOut }) {
     setContractYears(q.contractYears || 1);
     setYearEscalation(q.yearEscalation || 0);
     setHideDiscount(!!q.hideDiscount);
+    setPricingMode(q.pricingMode || "usd");
     setView("builder");
   }
 
@@ -2885,14 +2913,15 @@ export default function QuoteBuilder({ user, onSignOut }) {
   };
 
   const totals = useMemo(() => {
-    const cl = computeLines(lines, startDate, endDate, billingCycle);
+    const cl = computeLines(lines, startDate, endDate, billingCycle, pricingMode, currency.rate);
     const annualList = cl.reduce((s,l) => s+l.annual, 0);
     const discTotal  = cl.reduce((s,l) => s+l.disc, 0);
-    const subUSD     = cl.reduce((s,l) => s+l.net, 0);
-    const subLocal   = subUSD * currency.rate;
+    const subNative  = cl.reduce((s,l) => s+l.net, 0);
+    const subUSD     = pricingMode === "native" ? (currency.code === "USD" ? subNative : subNative / currency.rate) : subNative;
+    const subLocal   = pricingMode === "native" ? subNative : subUSD * currency.rate;
     const taxLocal   = subLocal * taxConfig.rate;
     return { annualList, discTotal, subUSD, subLocal, taxLocal, grand: subLocal + taxLocal };
-  }, [lines, startDate, endDate, billingCycle, currency, taxConfig]);
+  }, [lines, startDate, endDate, billingCycle, currency, taxConfig, pricingMode]);
 
   const yearlyTotals = useMemo(() => {
     const taxMult = 1 + taxConfig.rate;
@@ -3135,8 +3164,15 @@ export default function QuoteBuilder({ user, onSignOut }) {
                     <Sel label="Currency" value={currency.code} onChange={v => setCurrency(CURRENCIES.find(c => c.code === v))}
                       options={CURRENCIES.map(c => ({ value: c.code, label: `${c.code} — ${c.name} (${c.symbol})` }))}/>
                     {currency.code !== "USD" && (
-                      <Inp label={`FX Rate (1 USD → ${currency.code})`} type="number" min="0.01"
-                        value={currency.rate} onChange={v => setCurrency(c => ({ ...c, rate: parseFloat(v)||c.rate }))}/>
+                      <>
+                        <Sel label="Pricing Basis" value={pricingMode} onChange={setPricingMode}
+                          options={[
+                            { value: "usd", label: "USD List Price (auto-converted)" },
+                            { value: "native", label: `Native ${currency.code} Pricing (enter directly)` },
+                          ]}/>
+                        <Inp label={pricingMode === "native" ? `FX Rate (1 USD → ${currency.code}) — for internal reporting only` : `FX Rate (1 USD → ${currency.code})`} type="number" min="0.01"
+                          value={currency.rate} onChange={v => setCurrency(c => ({ ...c, rate: parseFloat(v)||c.rate }))}/>
+                      </>
                     )}
                     <Sel label="Tax" value={taxConfig.label} onChange={v => setTaxConfig(TAX_RATES.find(t => t.label === v))}
                       options={TAX_RATES.map(t => ({ value: t.label, label: t.label }))}/>
@@ -3184,7 +3220,8 @@ export default function QuoteBuilder({ user, onSignOut }) {
                         <ProductLine key={i} line={line}
                           onUpdate={u => setLines(prev => prev.map((l, idx) => idx === i ? u : l))}
                           onRemove={() => setLines(prev => prev.filter((_, idx) => idx !== i))}
-                          billingCycle={billingCycle} startDate={startDate} endDate={endDate}/>
+                          billingCycle={billingCycle} startDate={startDate} endDate={endDate}
+                          pricingMode={pricingMode} currency={currency}/>
                       ))}
                     </div>
                   )}
@@ -3194,10 +3231,16 @@ export default function QuoteBuilder({ user, onSignOut }) {
                       <div style={{ fontSize: "11px", fontWeight: 800, color: "rgba(255,255,255,0.4)", textTransform: "uppercase", letterSpacing: "0.09em", marginBottom: "12px" }}>Quote Summary</div>
                       <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
                         {[
-                          ["Annual List (USD)", `$${totals.annualList.toLocaleString("en-US",{minimumFractionDigits:2})}`, "#94A3B8"],
-                          ["Discount (USD)",   `-$${totals.discTotal.toLocaleString("en-US",{minimumFractionDigits:2})}`, "#FCA5A5"],
-                          ["Sub-Total (USD)",   `$${totals.subUSD.toLocaleString("en-US",{minimumFractionDigits:2})}`, "#E2E8F0"],
-                          currency.code !== "USD" ? [`Sub-Total (${currency.code})`, fmtC(totals.subLocal, currency.symbol, currency.code), "#BAE6FD"] : null,
+                          pricingMode === "native"
+                            ? [`Annual List (${currency.code})`, fmtC(totals.annualList, currency.symbol, currency.code), "#94A3B8"]
+                            : ["Annual List (USD)", `$${totals.annualList.toLocaleString("en-US",{minimumFractionDigits:2})}`, "#94A3B8"],
+                          pricingMode === "native"
+                            ? [`Discount (${currency.code})`, `-${fmtC(totals.discTotal, currency.symbol, currency.code)}`, "#FCA5A5"]
+                            : ["Discount (USD)",   `-$${totals.discTotal.toLocaleString("en-US",{minimumFractionDigits:2})}`, "#FCA5A5"],
+                          pricingMode === "native"
+                            ? [`Sub-Total (${currency.code})`, fmtC(totals.subLocal, currency.symbol, currency.code), "#E2E8F0"]
+                            : ["Sub-Total (USD)",   `$${totals.subUSD.toLocaleString("en-US",{minimumFractionDigits:2})}`, "#E2E8F0"],
+                          (pricingMode !== "native" && currency.code !== "USD") ? [`Sub-Total (${currency.code})`, fmtC(totals.subLocal, currency.symbol, currency.code), "#BAE6FD"] : null,
                           taxConfig.rate > 0 ? [taxConfig.label, fmtC(totals.taxLocal, currency.symbol, currency.code), "#FDE68A"] : null,
                         ].filter(Boolean).map(([l, v, c]) => (
                           <div key={l} style={{ display: "flex", justifyContent: "space-between", paddingBottom: "6px", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
@@ -3236,7 +3279,7 @@ export default function QuoteBuilder({ user, onSignOut }) {
 
       {showPreview && (
         <QuotePreview
-          data={{ lines, customer, qd, currency, billingCycle, monthCount, startDate, endDate, taxConfig, paymentTerms, contractYears, yearEscalation, yearlyTotals, totalContractValue, hideDiscount }}
+          data={{ lines, customer, qd, currency, billingCycle, monthCount, startDate, endDate, taxConfig, paymentTerms, contractYears, yearEscalation, yearlyTotals, totalContractValue, hideDiscount, pricingMode }}
           onClose={() => setShowPreview(false)}/>
       )}
     </div>
