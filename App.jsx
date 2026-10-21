@@ -72,7 +72,7 @@ const PRODUCTS = {
     addOns: [
       { id: "ss-standard-support", name: "Standard Support Package", unitPrice: 6.00,   description: "$6.00/user/yr" },
       { id: "ss-premium-support",  name: "Premium Support Package",  unitPrice: 6.00,   description: "$6.00/user/yr" },
-      { id: "ss-advance",          name: "Smartsheet Advance (AWM)", unitPrice: 144.00, description: "$12.00/user/mo × 12" },
+      { id: "ss-advance",          name: "Smartsheet Advance (AWM)", unitPrice: 546.00, description: "$546.00/unit/yr" },
       { id: "ss-dynamic-view",     name: "Dynamic View",             unitPrice: 1500.00, description: "$1,500.00/unit/yr" },
       { id: "ss-data-mesh",        name: "Smartsheet Data Mesh",     unitPrice: 12700.00, description: "$12,700.00/yr flat" },
       { id: "ss-data-shuttle",     name: "Data Shuttle",             unitPrice: 1200.00, description: "$1,200.00/yr flat" },
