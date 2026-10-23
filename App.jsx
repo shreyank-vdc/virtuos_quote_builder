@@ -64,6 +64,7 @@ const PRODUCTS = {
     tiers: [
       { id: "ss-pro",        name: "Smartsheet Pro",        unitPrice: 108.00, description: "$9.00/user/mo × 12" },
       { id: "ss-business",   name: "Smartsheet Business",   unitPrice: 228.00, description: "$19.00/user/mo × 12" },
+      { id: "ss-business-standard",   name: "Smartsheet Business Tier with Standard Support", unitPrice: 288.00, description: "$24.00/user/mo × 12 · Standard Support incl." },
       { id: "ss-business-premium",   name: "Smartsheet Business with Premium Support", unitPrice: 348.00, description: "$29.00/user/mo × 12 · Premium Support incl." },
       { id: "ss-enterprise",         name: "Smartsheet Enterprise",                        unitPrice: 540.00, description: "$45.00/user/mo × 12" },
       { id: "ss-enterprise-standard", name: "Smartsheet Enterprise Tier - Standard Support", unitPrice: 468.00, description: "$39.00/user/mo × 12 · Standard Support incl." },
